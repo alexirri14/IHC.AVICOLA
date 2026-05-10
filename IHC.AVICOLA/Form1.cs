@@ -16,6 +16,7 @@ namespace IHC.AVICOLA
         {
             InitializeComponent();
             btnProduccion.Click += BtnProduccion_Click;
+            Console.WriteLine("Hola mundo");
         }
 
         private void BtnProduccion_Click(object sender, EventArgs e)
@@ -23,6 +24,11 @@ namespace IHC.AVICOLA
             ProduccionForm produccionForm = new ProduccionForm();
             produccionForm.Show();
             this.Hide();
+        }
+
+        private void pnlMain_Paint(object sender, PaintEventArgs e)
+        {
+
         }
     }
 }
