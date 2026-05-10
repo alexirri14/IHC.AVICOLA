@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -15,6 +15,14 @@ namespace IHC.AVICOLA
         public Form1()
         {
             InitializeComponent();
+            btnProduccion.Click += BtnProduccion_Click;
+        }
+
+        private void BtnProduccion_Click(object sender, EventArgs e)
+        {
+            ProduccionForm produccionForm = new ProduccionForm();
+            produccionForm.Show();
+            this.Hide();
         }
     }
 }

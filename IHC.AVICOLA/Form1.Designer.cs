@@ -356,7 +356,6 @@
             this.lblAlimentoTitle.Location = new System.Drawing.Point(20, 20);
             this.lblAlimentoTitle.Name = "lblAlimentoTitle";
             this.lblAlimentoTitle.Size = new System.Drawing.Size(100, 19);
-            this.lblAlimentoTitle.TabIndex = 0;
             this.lblAlimentoTitle.Text = "Alimento stock";
             // 
             // lblAlimentoVal
