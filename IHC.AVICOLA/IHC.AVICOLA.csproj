@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -46,25 +46,68 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <!-- UserControls -->
+    <Compile Include="DashboardUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="DashboardUserControl.Designer.cs">
+      <DependentUpon>DashboardUserControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ProduccionUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="ProduccionUserControl.Designer.cs">
+      <DependentUpon>ProduccionUserControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="AlmacenHuevosUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="AlmacenHuevosUserControl.Designer.cs">
+      <DependentUpon>AlmacenHuevosUserControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="AlimentoUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="AlimentoUserControl.Designer.cs">
+      <DependentUpon>AlimentoUserControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MolinoUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="MolinoUserControl.Designer.cs">
+      <DependentUpon>MolinoUserControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="VentasUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="VentasUserControl.Designer.cs">
+      <DependentUpon>VentasUserControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ReportesUserControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="ReportesUserControl.Designer.cs">
+      <DependentUpon>ReportesUserControl.cs</DependentUpon>
+    </Compile>
+    <!-- Archivos principales -->
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="ProduccionForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ProduccionForm.Designer.cs">
-      <DependentUpon>ProduccionForm.cs</DependentUpon>
-    </Compile>
+    <Compile Include="ThemeManager.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <!-- Recursos -->
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="ProduccionForm.resx">
-      <DependentUpon>ProduccionForm.cs</DependentUpon>
+    <EmbeddedResource Include="MolinoUserControl.resx">
+      <DependentUpon>MolinoUserControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ProduccionUserControl.resx">
+      <DependentUpon>ProduccionUserControl.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
