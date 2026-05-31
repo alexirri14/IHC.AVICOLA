@@ -14,14 +14,31 @@ namespace IHC.AVICOLA
             InitializeComponent();
             InicializarDatos();
             ConfigurarEventos();
+            CargarGalpones();
+
             this.Load += ProduccionUserControl_Load;
             this.Resize += ProduccionUserControl_Resize;
         }
+        private void CargarGalpones()
+        {
+            cboGalpon.Items.Clear();
 
+            cboGalpon.Items.Add("Seleccionar");
+            cboGalpon.Items.Add("Galpón 4");
+            cboGalpon.Items.Add("Galpón 5");
+            cboGalpon.Items.Add("Galpón 6");
+            cboGalpon.Items.Add("Galpón 8");
+
+            cboGalpon.SelectedIndex = 0;
+        }
         private void ProduccionUserControl_Load(object sender, EventArgs e)
         {
             AjustarPaneles();
-            cboGalpon.SelectedIndex = 0;
+
+            if (cboGalpon.Items.Count > 0)
+            {
+                cboGalpon.SelectedIndex = 0;
+            }
         }
 
         private void ProduccionUserControl_Resize(object sender, EventArgs e)
@@ -31,59 +48,53 @@ namespace IHC.AVICOLA
 
         private void AjustarPaneles()
         {
-            // Ajustar el formulario de producción al ancho disponible
             int padding = pnlMainContainer.Padding.Left + pnlMainContainer.Padding.Right;
             int anchoDisponible = pnlMainContainer.ClientSize.Width - padding;
+
             pnlFormProduccion.Width = anchoDisponible;
             pnlProduccionDia.Width = anchoDisponible;
 
-            // Ajustar posición del panel de producción del día
-            pnlProduccionDia.Location = new System.Drawing.Point(pnlMainContainer.Padding.Left, pnlFormProduccion.Bottom + 20);
+            pnlProduccionDia.Location = new Point(
+                pnlMainContainer.Padding.Left,
+                pnlFormProduccion.Bottom + 20
+            );
 
-            // Ajustar la altura del scroll del contenedor principal
             int alturaTotalContenido = pnlProduccionDia.Bottom + pnlMainContainer.Padding.Bottom;
-            pnlMainContainer.AutoScrollMinSize = new System.Drawing.Size(0, alturaTotalContenido);
+            pnlMainContainer.AutoScrollMinSize = new Size(0, alturaTotalContenido);
         }
 
         private void InicializarDatos()
         {
-            // Crear DataTable para la producción del día
             _dtProduccion = new DataTable();
             _dtProduccion.Columns.Add("Galpón", typeof(string));
             _dtProduccion.Columns.Add("Fecha", typeof(string));
             _dtProduccion.Columns.Add("Huevos", typeof(int));
 
-            // Agregar datos de ejemplo
-            string fechaEjemplo = DateTime.Now.ToString("dd/MM");
-            _dtProduccion.Rows.Add("A", fechaEjemplo, 300);
-            _dtProduccion.Rows.Add("B", fechaEjemplo, 250);
-            _dtProduccion.Rows.Add("C", fechaEjemplo, 280);
-            _dtProduccion.Rows.Add("D", fechaEjemplo, 320);
-
-            // Asignar a DataGridView
             dgvProduccion.DataSource = _dtProduccion;
+
             ConfigurarDataGridView();
             ActualizarTotal();
         }
 
         private void ConfigurarDataGridView()
         {
-            // Estilo del DataGridView
             dgvProduccion.EnableHeadersVisualStyles = false;
             dgvProduccion.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(243, 244, 246);
             dgvProduccion.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(55, 65, 81);
             dgvProduccion.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+
             dgvProduccion.DefaultCellStyle.Font = new Font("Segoe UI", 10F);
             dgvProduccion.DefaultCellStyle.ForeColor = Color.FromArgb(31, 41, 55);
             dgvProduccion.DefaultCellStyle.SelectionBackColor = Color.FromArgb(209, 250, 229);
             dgvProduccion.DefaultCellStyle.SelectionForeColor = Color.FromArgb(6, 78, 59);
+
             dgvProduccion.AlternatingRowsDefaultCellStyle.BackColor = Color.White;
             dgvProduccion.BorderStyle = BorderStyle.None;
             dgvProduccion.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             dgvProduccion.GridColor = Color.FromArgb(229, 231, 235);
 
-            // Ajustar alto de filas
             dgvProduccion.RowTemplate.Height = 45;
+            dgvProduccion.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
 
         private void ConfigurarEventos()
@@ -103,8 +114,11 @@ namespace IHC.AVICOLA
 
         private void BtnCancelar_Click(object sender, EventArgs e)
         {
-            // Limpiar formulario
-            cboGalpon.SelectedIndex = 0;
+            if (cboGalpon.Items.Count > 0)
+            {
+                cboGalpon.SelectedIndex = 0;
+            }
+
             txtCantidad.Clear();
             dtpFecha.Value = DateTime.Now;
             lblError.Visible = false;
@@ -112,7 +126,6 @@ namespace IHC.AVICOLA
 
         private void BtnGuardar_Click(object sender, EventArgs e)
         {
-            // Validar campos
             if (ValidarCampos())
             {
                 string galponSeleccionado = cboGalpon.SelectedItem.ToString().Replace("Galpón ", "");
@@ -120,10 +133,14 @@ namespace IHC.AVICOLA
                 int cantidad = int.Parse(txtCantidad.Text);
 
                 bool encontrado = false;
+                int cantidadAnterior = 0;
+
                 foreach (DataRow row in _dtProduccion.Rows)
                 {
-                    if (row["Galpón"].ToString() == galponSeleccionado && row["Fecha"].ToString() == fechaFormateada)
+                    if (row["Galpón"].ToString() == galponSeleccionado &&
+                        row["Fecha"].ToString() == fechaFormateada)
                     {
+                        cantidadAnterior = Convert.ToInt32(row["Huevos"]);
                         row["Huevos"] = cantidad;
                         encontrado = true;
                         break;
@@ -135,9 +152,22 @@ namespace IHC.AVICOLA
                     _dtProduccion.Rows.Add(galponSeleccionado, fechaFormateada, cantidad);
                 }
 
+                int cantidadParaAlmacen = cantidad - cantidadAnterior;
+
+                DatosAlmacenHuevos.RegistrarMovimientoProduccion(
+                galponSeleccionado,
+                cantidadParaAlmacen,
+                dtpFecha.Value
+                );
+
                 ActualizarTotal();
 
-                MessageBox.Show("Producción registrada correctamente!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(
+                    "Producción registrada y enviada al almacén correctamente.",
+                    "Éxito",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
 
                 BtnCancelar_Click(sender, e);
             }
@@ -151,18 +181,18 @@ namespace IHC.AVICOLA
             if (cboGalpon.SelectedIndex <= 0)
             {
                 esValido = false;
-                mensajeError += "⚠️ Seleccione un galpón.\n";
+                mensajeError += " Seleccione un galpón.\n";
             }
 
             if (string.IsNullOrWhiteSpace(txtCantidad.Text))
             {
                 esValido = false;
-                mensajeError += "⚠️ Ingrese la cantidad de huevos.\n";
+                mensajeError += " Ingrese la cantidad de huevos.\n";
             }
             else if (int.Parse(txtCantidad.Text) <= 0)
             {
                 esValido = false;
-                mensajeError += "⚠️ La cantidad debe ser mayor a 0.\n";
+                mensajeError += " La cantidad debe ser mayor a 0.\n";
             }
 
             if (!esValido)
@@ -181,10 +211,12 @@ namespace IHC.AVICOLA
         private void ActualizarTotal()
         {
             int total = 0;
+
             foreach (DataRow row in _dtProduccion.Rows)
             {
                 total += Convert.ToInt32(row["Huevos"]);
             }
+
             lblTotal.Text = $"Total del día: {total} huevos";
         }
     }

@@ -7,14 +7,17 @@ namespace IHC.AVICOLA
 {
     public partial class AlmacenHuevosUserControl : UserControl
     {
-        private int _stockTotal = 9590;
         private DataTable _dtMovimientos;
 
         public AlmacenHuevosUserControl()
         {
             InitializeComponent();
             InicializarDatos();
+            CargarGalpones();
             ConfigurarEventos();
+
+            DatosAlmacenHuevos.StockActualizado += DatosAlmacenHuevos_StockActualizado;
+
             this.Load += AlmacenHuevosUserControl_Load;
             this.Resize += AlmacenHuevosUserControl_Resize;
         }
@@ -22,11 +25,18 @@ namespace IHC.AVICOLA
         private void AlmacenHuevosUserControl_Load(object sender, EventArgs e)
         {
             AjustarPaneles();
+            ActualizarResumen();
         }
 
         private void AlmacenHuevosUserControl_Resize(object sender, EventArgs e)
         {
             AjustarPaneles();
+        }
+
+        private void DatosAlmacenHuevos_StockActualizado(object sender, EventArgs e)
+        {
+            dgvMovimientos.Refresh();
+            ActualizarResumen();
         }
 
         private void AjustarPaneles()
@@ -38,32 +48,32 @@ namespace IHC.AVICOLA
             pnlFormMovimiento.Width = anchoDisponible;
             pnlMovimientos.Width = anchoDisponible;
 
-            pnlFormMovimiento.Location = new System.Drawing.Point(pnlMainContainer.Padding.Left, pnlResumen.Bottom + 20);
-            pnlMovimientos.Location = new System.Drawing.Point(pnlMainContainer.Padding.Left, pnlFormMovimiento.Bottom + 20);
+            pnlFormMovimiento.Location = new Point(
+                pnlMainContainer.Padding.Left,
+                pnlResumen.Bottom + 20
+            );
 
-            dgvMovimientos.Height = pnlMovimientos.ClientSize.Height - pnlMovimientos.Padding.Top - pnlMovimientos.Padding.Bottom - 75;
+            pnlMovimientos.Location = new Point(
+                pnlMainContainer.Padding.Left,
+                pnlFormMovimiento.Bottom + 20
+            );
+
+            dgvMovimientos.Height =
+                pnlMovimientos.ClientSize.Height -
+                pnlMovimientos.Padding.Top -
+                pnlMovimientos.Padding.Bottom -
+                75;
 
             int alturaTotalContenido = pnlMovimientos.Bottom + pnlMainContainer.Padding.Bottom;
-            pnlMainContainer.AutoScrollMinSize = new System.Drawing.Size(0, alturaTotalContenido);
+            pnlMainContainer.AutoScrollMinSize = new Size(0, alturaTotalContenido);
         }
 
         private void InicializarDatos()
         {
-            // Crear DataTable para ingresos desde galpón
-            _dtMovimientos = new DataTable();
-            _dtMovimientos.Columns.Add("ID", typeof(int));
-            _dtMovimientos.Columns.Add("Fecha", typeof(DateTime));
-            _dtMovimientos.Columns.Add("Galpón Origen", typeof(string));
-            _dtMovimientos.Columns.Add("Cantidad", typeof(int));
-            _dtMovimientos.Columns.Add("Responsable", typeof(string));
+            _dtMovimientos = DatosAlmacenHuevos.Movimientos;
 
-            // Agregar datos de ejemplo
-            _dtMovimientos.Rows.Add(1, DateTime.Now.AddDays(-2), "Galpón A", 1500, "Juan Pérez");
-            _dtMovimientos.Rows.Add(2, DateTime.Now.AddDays(-1), "Galpón B", 1400, "María López");
-            _dtMovimientos.Rows.Add(3, DateTime.Now, "Galpón C", 1200, "Carlos Ruiz");
-
-            // Asignar a DataGridView
             dgvMovimientos.DataSource = _dtMovimientos;
+
             ConfigurarDataGridView();
             ActualizarResumen();
         }
@@ -71,14 +81,24 @@ namespace IHC.AVICOLA
         private void ConfigurarDataGridView()
         {
             dgvMovimientos.EnableHeadersVisualStyles = false;
+
             dgvMovimientos.ColumnHeadersDefaultCellStyle.BackColor = Color.Teal;
             dgvMovimientos.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
             dgvMovimientos.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+
             dgvMovimientos.DefaultCellStyle.SelectionBackColor = Color.LightSeaGreen;
             dgvMovimientos.DefaultCellStyle.SelectionForeColor = Color.White;
+
             dgvMovimientos.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
             dgvMovimientos.BorderStyle = BorderStyle.None;
             dgvMovimientos.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+
+            dgvMovimientos.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            if (dgvMovimientos.Columns.Contains("Fecha"))
+            {
+                dgvMovimientos.Columns["Fecha"].DefaultCellStyle.Format = "dd/MM/yyyy HH:mm";
+            }
         }
 
         private void ConfigurarEventos()
@@ -91,7 +111,9 @@ namespace IHC.AVICOLA
         private void TxtCantidad_KeyPress(object sender, KeyPressEventArgs e)
         {
             if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+            {
                 e.Handled = true;
+            }
         }
 
         private void BtnCancelar_Click(object sender, EventArgs e)
@@ -108,23 +130,29 @@ namespace IHC.AVICOLA
                 int cantidad = int.Parse(txtCantidadMov.Text);
                 string galpon = cboGalpon.SelectedItem.ToString();
 
-                // Actualizar stock
-                _stockTotal += cantidad;
-
-                // Agregar movimiento de ingreso desde galpón
-                int nuevoId = _dtMovimientos.Rows.Count + 1;
-                _dtMovimientos.Rows.Add(nuevoId, DateTime.Now, galpon, cantidad, "Usuario Actual");
+                DatosAlmacenHuevos.RegistrarIngresoManual(
+                    galpon,
+                    cantidad,
+                    "Usuario Actual"
+                );
 
                 ActualizarResumen();
-                MessageBox.Show("Ingreso desde galpón registrado correctamente!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                MessageBox.Show(
+                    "Ingreso registrado correctamente en almacén.",
+                    "Éxito",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
+
                 BtnCancelar_Click(sender, e);
             }
         }
 
         private void ActualizarResumen()
         {
-            lblStock.Text = $"{_stockTotal:N0} Huevos";
-            lblDisponibles.Text = $"{_stockTotal:N0} 🟢";
+            lblStock.Text = $"{DatosAlmacenHuevos.StockTotal:N0} Huevos";
+            lblDisponibles.Text = $"{DatosAlmacenHuevos.StockTotal:N0} 🟢";
         }
 
         private bool ValidarCampos()
@@ -160,6 +188,17 @@ namespace IHC.AVICOLA
             }
 
             return esValido;
+        }
+        private void CargarGalpones()
+        {
+            cboGalpon.Items.Clear();
+
+            cboGalpon.Items.Add("Galpón 4");
+            cboGalpon.Items.Add("Galpón 5");
+            cboGalpon.Items.Add("Galpón 6");
+            cboGalpon.Items.Add("Galpón 8");
+
+            cboGalpon.SelectedIndex = -1;
         }
     }
 }

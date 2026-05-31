@@ -151,13 +151,6 @@ namespace IHC.AVICOLA
             this.cboGalpon.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cboGalpon.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.cboGalpon.FormattingEnabled = true;
-            this.cboGalpon.Items.AddRange(new object[] {
-            "Seleccionar",
-            "Galpón A",
-            "Galpón B",
-            "Galpón C",
-            "Galpón D",
-            "Galpón E"});
             this.cboGalpon.Location = new System.Drawing.Point(29, 90);
             this.cboGalpon.Margin = new System.Windows.Forms.Padding(4);
             this.cboGalpon.Name = "cboGalpon";

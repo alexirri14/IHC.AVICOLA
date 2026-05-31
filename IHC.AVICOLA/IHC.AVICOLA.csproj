@@ -53,6 +53,7 @@
     <Compile Include="DashboardUserControl.Designer.cs">
       <DependentUpon>DashboardUserControl.cs</DependentUpon>
     </Compile>
+    <Compile Include="DatosAlmacenHuevos.cs" />
     <Compile Include="ProduccionUserControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
