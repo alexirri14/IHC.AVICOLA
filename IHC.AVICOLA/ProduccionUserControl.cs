@@ -128,7 +128,7 @@ namespace IHC.AVICOLA
         {
             if (ValidarCampos())
             {
-                string galponSeleccionado = cboGalpon.SelectedItem.ToString().Replace("Galpón ", "");
+                string galponSeleccionado = "Galpón " + cboGalpon.SelectedItem.ToString().Replace("Galpón ", "");
                 string fechaFormateada = dtpFecha.Value.ToString("dd/MM");
                 int cantidad = int.Parse(txtCantidad.Text);
 
@@ -137,7 +137,7 @@ namespace IHC.AVICOLA
 
                 foreach (DataRow row in _dtProduccion.Rows)
                 {
-                    if (row["Galpón"].ToString() == galponSeleccionado &&
+                    if (row["Galpón"].ToString() == galponSeleccionado.Replace("Galpón ", "") &&
                         row["Fecha"].ToString() == fechaFormateada)
                     {
                         cantidadAnterior = Convert.ToInt32(row["Huevos"]);
@@ -149,15 +149,15 @@ namespace IHC.AVICOLA
 
                 if (!encontrado)
                 {
-                    _dtProduccion.Rows.Add(galponSeleccionado, fechaFormateada, cantidad);
+                    _dtProduccion.Rows.Add(galponSeleccionado.Replace("Galpón ", ""), fechaFormateada, cantidad);
                 }
 
                 int cantidadParaAlmacen = cantidad - cantidadAnterior;
 
-                DatosAlmacenHuevos.RegistrarMovimientoProduccion(
-                galponSeleccionado,
-                cantidadParaAlmacen,
-                dtpFecha.Value
+                DataManager.RegistrarProduccion(
+                    galponSeleccionado,
+                    cantidadParaAlmacen,
+                    dtpFecha.Value
                 );
 
                 ActualizarTotal();

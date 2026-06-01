@@ -34,7 +34,6 @@ namespace IHC.AVICOLA
             this.pnlAlertas = new System.Windows.Forms.Panel();
             this.lblAlertasTitle = new System.Windows.Forms.Label();
             this.lblAlerta1 = new System.Windows.Forms.Label();
-            this.lblAlerta2 = new System.Windows.Forms.Label();
             this.pnlRendimiento = new System.Windows.Forms.Panel();
             this.lblRendimientoTitle = new System.Windows.Forms.Label();
             this.lblPromedioTitle = new System.Windows.Forms.Label();
@@ -61,7 +60,7 @@ namespace IHC.AVICOLA
             this.pnlResumen.Controls.Add(this.pnlAlimento);
             this.pnlResumen.Dock = System.Windows.Forms.DockStyle.Top;
             this.pnlResumen.Location = new System.Drawing.Point(0, 0);
-            this.pnlResumen.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlResumen.Margin = new System.Windows.Forms.Padding(4);
             this.pnlResumen.Name = "pnlResumen";
             this.pnlResumen.Size = new System.Drawing.Size(1787, 222);
             this.pnlResumen.TabIndex = 0;
@@ -84,7 +83,7 @@ namespace IHC.AVICOLA
             this.pnlHuevos.Controls.Add(this.lblHuevosVal);
             this.pnlHuevos.Controls.Add(this.lblHuevosTitle);
             this.pnlHuevos.Location = new System.Drawing.Point(0, 62);
-            this.pnlHuevos.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlHuevos.Margin = new System.Windows.Forms.Padding(4);
             this.pnlHuevos.Name = "pnlHuevos";
             this.pnlHuevos.Size = new System.Drawing.Size(400, 148);
             this.pnlHuevos.TabIndex = 1;
@@ -97,9 +96,9 @@ namespace IHC.AVICOLA
             this.lblHuevosVal.Location = new System.Drawing.Point(27, 68);
             this.lblHuevosVal.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblHuevosVal.Name = "lblHuevosVal";
-            this.lblHuevosVal.Size = new System.Drawing.Size(182, 54);
+            this.lblHuevosVal.Size = new System.Drawing.Size(46, 54);
             this.lblHuevosVal.TabIndex = 1;
-            this.lblHuevosVal.Text = "1200 🥚";
+            this.lblHuevosVal.Text = "0";
             // 
             // lblHuevosTitle
             // 
@@ -119,7 +118,7 @@ namespace IHC.AVICOLA
             this.pnlStock.Controls.Add(this.lblStockVal);
             this.pnlStock.Controls.Add(this.lblStockTitle);
             this.pnlStock.Location = new System.Drawing.Point(427, 62);
-            this.pnlStock.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlStock.Margin = new System.Windows.Forms.Padding(4);
             this.pnlStock.Name = "pnlStock";
             this.pnlStock.Size = new System.Drawing.Size(400, 148);
             this.pnlStock.TabIndex = 2;
@@ -132,9 +131,9 @@ namespace IHC.AVICOLA
             this.lblStockVal.Location = new System.Drawing.Point(27, 68);
             this.lblStockVal.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblStockVal.Name = "lblStockVal";
-            this.lblStockVal.Size = new System.Drawing.Size(182, 54);
+            this.lblStockVal.Size = new System.Drawing.Size(46, 54);
             this.lblStockVal.TabIndex = 1;
-            this.lblStockVal.Text = "8500 📦";
+            this.lblStockVal.Text = "0";
             // 
             // lblStockTitle
             // 
@@ -154,7 +153,7 @@ namespace IHC.AVICOLA
             this.pnlVentas.Controls.Add(this.lblVentasVal);
             this.pnlVentas.Controls.Add(this.lblVentasTitle);
             this.pnlVentas.Location = new System.Drawing.Point(853, 62);
-            this.pnlVentas.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlVentas.Margin = new System.Windows.Forms.Padding(4);
             this.pnlVentas.Name = "pnlVentas";
             this.pnlVentas.Size = new System.Drawing.Size(400, 148);
             this.pnlVentas.TabIndex = 3;
@@ -167,9 +166,9 @@ namespace IHC.AVICOLA
             this.lblVentasVal.Location = new System.Drawing.Point(27, 68);
             this.lblVentasVal.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblVentasVal.Name = "lblVentasVal";
-            this.lblVentasVal.Size = new System.Drawing.Size(233, 54);
+            this.lblVentasVal.Size = new System.Drawing.Size(46, 54);
             this.lblVentasVal.TabIndex = 1;
-            this.lblVentasVal.Text = "S/ 1500 💰";
+            this.lblVentasVal.Text = "0";
             // 
             // lblVentasTitle
             // 
@@ -189,7 +188,7 @@ namespace IHC.AVICOLA
             this.pnlAlimento.Controls.Add(this.lblAlimentoVal);
             this.pnlAlimento.Controls.Add(this.lblAlimentoTitle);
             this.pnlAlimento.Location = new System.Drawing.Point(1280, 62);
-            this.pnlAlimento.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlAlimento.Margin = new System.Windows.Forms.Padding(4);
             this.pnlAlimento.Name = "pnlAlimento";
             this.pnlAlimento.Size = new System.Drawing.Size(400, 148);
             this.pnlAlimento.TabIndex = 4;
@@ -202,9 +201,9 @@ namespace IHC.AVICOLA
             this.lblAlimentoVal.Location = new System.Drawing.Point(27, 68);
             this.lblAlimentoVal.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblAlimentoVal.Name = "lblAlimentoVal";
-            this.lblAlimentoVal.Size = new System.Drawing.Size(271, 54);
+            this.lblAlimentoVal.Size = new System.Drawing.Size(46, 54);
             this.lblAlimentoVal.TabIndex = 1;
-            this.lblAlimentoVal.Text = "300 sacos 🌾";
+            this.lblAlimentoVal.Text = "0";
             // 
             // lblAlimentoTitle
             // 
@@ -223,10 +222,9 @@ namespace IHC.AVICOLA
             this.pnlAlertas.BackColor = System.Drawing.Color.White;
             this.pnlAlertas.Controls.Add(this.lblAlertasTitle);
             this.pnlAlertas.Controls.Add(this.lblAlerta1);
-            this.pnlAlertas.Controls.Add(this.lblAlerta2);
             this.pnlAlertas.Dock = System.Windows.Forms.DockStyle.Top;
             this.pnlAlertas.Location = new System.Drawing.Point(0, 222);
-            this.pnlAlertas.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlAlertas.Margin = new System.Windows.Forms.Padding(4);
             this.pnlAlertas.Name = "pnlAlertas";
             this.pnlAlertas.Size = new System.Drawing.Size(1787, 222);
             this.pnlAlertas.TabIndex = 1;
@@ -256,19 +254,6 @@ namespace IHC.AVICOLA
             this.lblAlerta1.Text = "⚠️ Bajo stock de alimento";
             this.lblAlerta1.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // lblAlerta2
-            // 
-            this.lblAlerta2.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(251)))), ((int)(((byte)(235)))));
-            this.lblAlerta2.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblAlerta2.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(146)))), ((int)(((byte)(64)))), ((int)(((byte)(14)))));
-            this.lblAlerta2.Location = new System.Drawing.Point(27, 135);
-            this.lblAlerta2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
-            this.lblAlerta2.Name = "lblAlerta2";
-            this.lblAlerta2.Size = new System.Drawing.Size(1733, 49);
-            this.lblAlerta2.TabIndex = 2;
-            this.lblAlerta2.Text = "⚠️ Diferencia en inventario";
-            this.lblAlerta2.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
             // pnlRendimiento
             // 
             this.pnlRendimiento.BackColor = System.Drawing.Color.Teal;
@@ -281,7 +266,7 @@ namespace IHC.AVICOLA
             this.pnlRendimiento.Controls.Add(this.lblTasa);
             this.pnlRendimiento.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pnlRendimiento.Location = new System.Drawing.Point(0, 444);
-            this.pnlRendimiento.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.pnlRendimiento.Margin = new System.Windows.Forms.Padding(4);
             this.pnlRendimiento.Name = "pnlRendimiento";
             this.pnlRendimiento.Size = new System.Drawing.Size(1787, 319);
             this.pnlRendimiento.TabIndex = 2;
@@ -318,9 +303,9 @@ namespace IHC.AVICOLA
             this.lblPromedio.Location = new System.Drawing.Point(27, 135);
             this.lblPromedio.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblPromedio.Name = "lblPromedio";
-            this.lblPromedio.Size = new System.Drawing.Size(202, 46);
+            this.lblPromedio.Size = new System.Drawing.Size(40, 46);
             this.lblPromedio.TabIndex = 2;
-            this.lblPromedio.Text = "300 huevos";
+            this.lblPromedio.Text = "0";
             // 
             // lblConsumoTitle
             // 
@@ -331,6 +316,7 @@ namespace IHC.AVICOLA
             this.lblConsumoTitle.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblConsumoTitle.Name = "lblConsumoTitle";
             this.lblConsumoTitle.Size = new System.Drawing.Size(155, 23);
+            this.lblConsumoTitle.TabIndex = 3;
             this.lblConsumoTitle.Text = "Consumo alimento";
             // 
             // lblConsumo
@@ -341,9 +327,9 @@ namespace IHC.AVICOLA
             this.lblConsumo.Location = new System.Drawing.Point(533, 135);
             this.lblConsumo.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblConsumo.Name = "lblConsumo";
-            this.lblConsumo.Size = new System.Drawing.Size(154, 46);
+            this.lblConsumo.Size = new System.Drawing.Size(40, 46);
             this.lblConsumo.TabIndex = 4;
-            this.lblConsumo.Text = "20 sacos";
+            this.lblConsumo.Text = "0";
             // 
             // lblTasaTitle
             // 
@@ -365,9 +351,9 @@ namespace IHC.AVICOLA
             this.lblTasa.Location = new System.Drawing.Point(1040, 135);
             this.lblTasa.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblTasa.Name = "lblTasa";
-            this.lblTasa.Size = new System.Drawing.Size(89, 46);
+            this.lblTasa.Size = new System.Drawing.Size(40, 46);
             this.lblTasa.TabIndex = 6;
-            this.lblTasa.Text = "85%";
+            this.lblTasa.Text = "0";
             // 
             // DashboardUserControl
             // 
@@ -377,7 +363,7 @@ namespace IHC.AVICOLA
             this.Controls.Add(this.pnlRendimiento);
             this.Controls.Add(this.pnlAlertas);
             this.Controls.Add(this.pnlResumen);
-            this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.Margin = new System.Windows.Forms.Padding(4);
             this.Name = "DashboardUserControl";
             this.Size = new System.Drawing.Size(1787, 763);
             this.pnlResumen.ResumeLayout(false);
@@ -417,7 +403,6 @@ namespace IHC.AVICOLA
         private System.Windows.Forms.Panel pnlAlertas;
         private System.Windows.Forms.Label lblAlertasTitle;
         private System.Windows.Forms.Label lblAlerta1;
-        private System.Windows.Forms.Label lblAlerta2;
         private System.Windows.Forms.Panel pnlRendimiento;
         private System.Windows.Forms.Label lblRendimientoTitle;
         private System.Windows.Forms.Label lblPromedioTitle;

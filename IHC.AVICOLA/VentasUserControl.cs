@@ -7,8 +7,6 @@ namespace IHC.AVICOLA
 {
     public partial class VentasUserControl : UserControl
     {
-        private DataTable _dtHistorial;
-
         public VentasUserControl()
         {
             InitializeComponent();
@@ -33,78 +31,133 @@ namespace IHC.AVICOLA
             int padding = pnlMain.Padding.Left + pnlMain.Padding.Right;
             int anchoDisponible = pnlMain.ClientSize.Width - padding;
 
-            pnlTitulo.Width = anchoDisponible;
-            pnlForm.Width = anchoDisponible;
-            pnlHistorial.Width = anchoDisponible;
+            if (pnlRegistro != null)
+                pnlRegistro.Width = anchoDisponible;
+            if (pnlHistorial != null)
+                pnlHistorial.Width = anchoDisponible;
 
-            pnlForm.Location = new System.Drawing.Point(pnlMain.Padding.Left, pnlTitulo.Bottom + 20);
-            pnlHistorial.Location = new System.Drawing.Point(pnlMain.Padding.Left, pnlForm.Bottom + 20);
+            if (pnlHistorial != null && pnlRegistro != null)
+                pnlHistorial.Location = new Point(pnlMain.Padding.Left, pnlRegistro.Bottom + 20);
 
-            dgvHistorial.Height = pnlHistorial.ClientSize.Height - pnlHistorial.Padding.Top - pnlHistorial.Padding.Bottom - 75;
-
-            int alturaTotalContenido = pnlHistorial.Bottom + pnlMain.Padding.Bottom;
-            pnlMain.AutoScrollMinSize = new System.Drawing.Size(0, alturaTotalContenido);
+            int alturaTotalContenido = 0;
+            if (pnlHistorial != null)
+                alturaTotalContenido = pnlHistorial.Bottom + pnlMain.Padding.Bottom;
+            pnlMain.AutoScrollMinSize = new Size(0, alturaTotalContenido);
         }
 
         private void InicializarDatos()
         {
-            _dtHistorial = new DataTable();
-            _dtHistorial.Columns.Add("ID", typeof(int));
-            _dtHistorial.Columns.Add("Fecha", typeof(DateTime));
-            _dtHistorial.Columns.Add("Cliente", typeof(string));
-            _dtHistorial.Columns.Add("Cantidad", typeof(int));
-            _dtHistorial.Columns.Add("Total", typeof(decimal));
-
-            _dtHistorial.Rows.Add(1, DateTime.Now.AddDays(-2), "Juan Pérez", 500, 750.00m);
-            _dtHistorial.Rows.Add(2, DateTime.Now.AddDays(-1), "María López", 300, 450.00m);
-            _dtHistorial.Rows.Add(3, DateTime.Now, "Carlos Ruiz", 400, 600.00m);
-
-            dgvHistorial.DataSource = _dtHistorial;
+            dgvHistorial.DataSource = DataManager.Ventas;
             ConfigurarDataGridView();
+            CalcularTotalVentas();
+
+            // Establecer el precio unitario por defecto
+            txtPrecioUnitario.Text = "0.40";
         }
 
         private void ConfigurarDataGridView()
         {
             dgvHistorial.EnableHeadersVisualStyles = false;
-            dgvHistorial.ColumnHeadersDefaultCellStyle.BackColor = Color.Teal;
-            dgvHistorial.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgvHistorial.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
+            dgvHistorial.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(73, 80, 87);
             dgvHistorial.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
             dgvHistorial.DefaultCellStyle.SelectionBackColor = Color.LightSeaGreen;
             dgvHistorial.DefaultCellStyle.SelectionForeColor = Color.White;
-            dgvHistorial.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
+            dgvHistorial.AlternatingRowsDefaultCellStyle.BackColor = Color.White;
             dgvHistorial.BorderStyle = BorderStyle.None;
             dgvHistorial.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+
+            // Ocultar columna ID
+            if (dgvHistorial.Columns["ID"] != null)
+                dgvHistorial.Columns["ID"].Visible = false;
+            if (dgvHistorial.Columns["PrecioUnitario"] != null)
+                dgvHistorial.Columns["PrecioUnitario"].HeaderText = "P. Unit.";
+
+            // Formatear columnas de precio
+            if (dgvHistorial.Columns["PrecioUnitario"] != null)
+                dgvHistorial.Columns["PrecioUnitario"].DefaultCellStyle.Format = "0.00";
+            if (dgvHistorial.Columns["Total"] != null)
+                dgvHistorial.Columns["Total"].DefaultCellStyle.Format = "0.00";
         }
 
         private void ConfigurarEventos()
         {
-            btnGuardar.Click += BtnGuardar_Click;
-            btnCancelar.Click += BtnCancelar_Click;
-            txtCantidad.KeyPress += TxtCantidad_KeyPress;
+            btnRegistrar.Click += BtnRegistrar_Click;
+            txtCantidad.TextChanged += TxtValores_TextChanged;
+            txtPrecioUnitario.TextChanged += TxtValores_TextChanged;
+            txtCantidad.KeyPress += TxtNumeros_KeyPress;
+            txtPrecioUnitario.KeyPress += TxtPrecio_KeyPress;
         }
 
-        private void TxtCantidad_KeyPress(object sender, KeyPressEventArgs e)
+        private void TxtNumeros_KeyPress(object sender, KeyPressEventArgs e)
         {
             if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
                 e.Handled = true;
         }
 
-        private void BtnCancelar_Click(object sender, EventArgs e)
+        private void TxtPrecio_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar) && e.KeyChar != '.')
+                e.Handled = true;
+        }
+
+        private void TxtValores_TextChanged(object sender, EventArgs e)
+        {
+            ActualizarTotalFormulario();
+        }
+
+        private void ActualizarTotalFormulario()
+        {
+            int cantidad = 0;
+            decimal precioUnitario = 0;
+
+            int.TryParse(txtCantidad.Text, out cantidad);
+            decimal.TryParse(txtPrecioUnitario.Text, out precioUnitario);
+
+            decimal total = cantidad * precioUnitario;
+            lblTotal.Text = $"Total: S/ {total:0.00}";
+        }
+
+        private void BtnRegistrar_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(txtCliente.Text))
+            {
+                MessageBox.Show("Por favor ingrese el nombre del cliente.", "Advertencia", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!int.TryParse(txtCantidad.Text, out int cantidad) || cantidad <= 0)
+            {
+                MessageBox.Show("Por favor ingrese una cantidad válida.", "Advertencia", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!decimal.TryParse(txtPrecioUnitario.Text, out decimal precioUnitario) || precioUnitario <= 0)
+            {
+                MessageBox.Show("Por favor ingrese un precio unitario válido.", "Advertencia", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Registrar la venta en el DataManager
+            DataManager.RegistrarVenta(txtCliente.Text, cantidad, precioUnitario);
+            
+            CalcularTotalVentas();
+            MessageBox.Show("Venta registrada correctamente!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LimpiarFormulario();
+        }
+
+        private void LimpiarFormulario()
         {
             txtCliente.Clear();
             txtCantidad.Clear();
+            txtPrecioUnitario.Text = "0.40";
+            lblTotal.Text = "Total: S/ 0.00";
         }
 
-        private void BtnGuardar_Click(object sender, EventArgs e)
+        private void CalcularTotalVentas()
         {
-            if (!string.IsNullOrWhiteSpace(txtCliente.Text) && !string.IsNullOrWhiteSpace(txtCantidad.Text))
-            {
-                int nuevoId = _dtHistorial.Rows.Count + 1;
-                decimal total = int.Parse(txtCantidad.Text) * 1.50m;
-                _dtHistorial.Rows.Add(nuevoId, DateTime.Now, txtCliente.Text, int.Parse(txtCantidad.Text), total);
-                MessageBox.Show("Venta registrada correctamente!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                BtnCancelar_Click(sender, e);
-            }
+            decimal total = DataManager.ObtenerTotalVentas();
+            lblTotalVentas.Text = $"S/ {total:0.00}";
         }
     }
 }

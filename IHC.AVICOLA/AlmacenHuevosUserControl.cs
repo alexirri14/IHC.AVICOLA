@@ -16,7 +16,7 @@ namespace IHC.AVICOLA
             CargarGalpones();
             ConfigurarEventos();
 
-            DatosAlmacenHuevos.StockActualizado += DatosAlmacenHuevos_StockActualizado;
+            DataManager.DatosActualizados += DataManager_DatosActualizados;
 
             this.Load += AlmacenHuevosUserControl_Load;
             this.Resize += AlmacenHuevosUserControl_Resize;
@@ -33,7 +33,7 @@ namespace IHC.AVICOLA
             AjustarPaneles();
         }
 
-        private void DatosAlmacenHuevos_StockActualizado(object sender, EventArgs e)
+        private void DataManager_DatosActualizados(object sender, EventArgs e)
         {
             dgvMovimientos.Refresh();
             ActualizarResumen();
@@ -70,7 +70,7 @@ namespace IHC.AVICOLA
 
         private void InicializarDatos()
         {
-            _dtMovimientos = DatosAlmacenHuevos.Movimientos;
+            _dtMovimientos = DataManager.AlmacenHuevos;
 
             dgvMovimientos.DataSource = _dtMovimientos;
 
@@ -130,7 +130,7 @@ namespace IHC.AVICOLA
                 int cantidad = int.Parse(txtCantidadMov.Text);
                 string galpon = cboGalpon.SelectedItem.ToString();
 
-                DatosAlmacenHuevos.RegistrarIngresoManual(
+                DataManager.RegistrarIngresoHuevos(
                     galpon,
                     cantidad,
                     "Usuario Actual"
@@ -151,8 +151,8 @@ namespace IHC.AVICOLA
 
         private void ActualizarResumen()
         {
-            lblStock.Text = $"{DatosAlmacenHuevos.StockTotal:N0} Huevos";
-            lblDisponibles.Text = $"{DatosAlmacenHuevos.StockTotal:N0} 🟢";
+            lblStock.Text = $"{DataManager.StockHuevos:N0} Huevos";
+            lblDisponibles.Text = $"{DataManager.StockHuevos:N0} 🟢";
         }
 
         private bool ValidarCampos()
