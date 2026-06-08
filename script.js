@@ -2,26 +2,24 @@
 const DataManager = {
     // Datos de producción
     produccion: [
-        { id: 1, fecha: "2026-01-01", galpon: "Galpón A", cantidad: 300 },
-        { id: 2, fecha: "2026-01-01", galpon: "Galpón B", cantidad: 250 },
-        { id: 3, fecha: "2026-01-01", galpon: "Galpón C", cantidad: 280 },
-        { id: 4, fecha: "2026-01-01", galpon: "Galpón D", cantidad: 320 },
-        { id: 5, fecha: "2026-01-02", galpon: "Galpón A", cantidad: 310 },
-        { id: 6, fecha: "2026-01-02", galpon: "Galpón B", cantidad: 260 },
-    ],
+        { id: 1, fecha: "2026-01-01", galpon: "Galpón 4", cantidad: 300 },
+        { id: 2, fecha: "2026-01-01", galpon: "Galpón 5", cantidad: 250 },
+        { id: 3, fecha: "2026-01-01", galpon: "Galpón 6", cantidad: 280 },
+        { id: 4, fecha: "2026-01-01", galpon: "Galpón 8", cantidad: 320 },
+        { id: 5, fecha: "2026-01-02", galpon: "Galpón Automático", cantidad: 310 },    ],
     
     // Datos de ventas
     ventas: [
-        { id: 1, fecha: "2026-01-01", cliente: "Juan Pérez", cantidad: 500, precioUnitario: 0.40, total: 200.00 },
-        { id: 2, fecha: "2026-01-01", cliente: "María López", cantidad: 300, precioUnitario: 0.40, total: 120.00 },
-        { id: 3, fecha: "2026-01-02", cliente: "Carlos Ruiz", cantidad: 400, precioUnitario: 0.42, total: 168.00 },
-        { id: 4, fecha: "2026-01-02", cliente: "Ana García", cantidad: 600, precioUnitario: 0.40, total: 240.00 },
+        { id: 1, fecha: "2026-01-01", cliente: "Royce", cantidad: 500, precioUnitario: 0.40, total: 200.00 },
+        { id: 2, fecha: "2026-01-01", cliente: "Angela Chicoma", cantidad: 300, precioUnitario: 0.40, total: 120.00 },
+        { id: 3, fecha: "2026-01-02", cliente: "Jefferso", cantidad: 400, precioUnitario: 0.42, total: 168.00 },
+        { id: 4, fecha: "2026-01-02", cliente: "Jose Francisco", cantidad: 600, precioUnitario: 0.40, total: 240.00 },
     ],
     
     // Datos de almacén huevos
     almacenHuevos: [
-        { id: 1, fecha: "2026-01-01", galponOrigen: "Galpón A", cantidad: 300, responsable: "Administrador" },
-        { id: 2, fecha: "2026-01-01", galponOrigen: "Galpón B", cantidad: 250, responsable: "Administrador" },
+        { id: 1, fecha: "2026-01-01", galponOrigen: "Galpón 4", cantidad: 300, responsable: "Administrador" },
+        { id: 2, fecha: "2026-01-01", galponOrigen: "Galpón 5", cantidad: 250, responsable: "Administrador" },
     ],
     
     // Stock huevos
@@ -130,11 +128,11 @@ const DataManager = {
     // ====== Obtener reportes ======
     getProduccionPorGalpon() {
         const res = {
-            "Galpón A": { diaria: 0, semanal: 0, promedio: 0 },
-            "Galpón B": { diaria: 0, semanal: 0, promedio: 0 },
-            "Galpón C": { diaria: 0, semanal: 0, promedio: 0 },
-            "Galpón D": { diaria: 0, semanal: 0, promedio: 0 },
-            "Galpón E": { diaria: 0, semanal: 0, promedio: 0 }
+            "Galpón 4": { diaria: 0, semanal: 0, promedio: 0 },
+            "Galpón 5": { diaria: 0, semanal: 0, promedio: 0 },
+            "Galpón 6": { diaria: 0, semanal: 0, promedio: 0 },
+            "Galpón 8": { diaria: 0, semanal: 0, promedio: 0 },
+            "Galpón Automático": { diaria: 0, semanal: 0, promedio: 0 }
         };
         this.produccion.forEach(p => {
             if (res[p.galpon]) {
@@ -293,7 +291,10 @@ function inicializarFormularios() {
     // Establecer fecha por defecto en formularios
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('produccion-fecha').value = hoy;
-    document.getElementById('almacen-fecha')?.value = hoy; // No hay, pero por si acaso
+    const almacenFechaInput = document.getElementById('almacen-fecha');
+    if (almacenFechaInput) {
+        almacenFechaInput.value = hoy;
+    }
     document.getElementById('molino-fecha').value = hoy;
     
     // ----- FORMULARIO PRODUCCIÓN -----
@@ -544,9 +545,9 @@ function dibujarGraficoProduccion() {
     const canvas = document.getElementById('chart-produccion');
     const ctx = canvas.getContext('2d');
     const datos = DataManager.getProduccionPorGalpon();
-    const galpones = Object.keys(datos).slice(0,4); // 4 Galpones
-    canvas.width = 700;
-    canvas.height = 400;
+    const galpones = Object.keys(datos); // 5 Galpones
+    canvas.width = 800;
+    canvas.height = 420;
     
     const colores = ['#008080', '#ff8c00']; // Diaria y semanal
     const anchoBarra = 60;

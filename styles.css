@@ -370,7 +370,7 @@ html, body {
 }
 
 .total-big {
-    background: linear-gradient(90deg, var(--color-primario), var(--color-exito);
+    background: linear-gradient(90deg, var(--color-primario), var(--color-exito));
     color: white;
     display: flex;
     align-items: center;
@@ -410,26 +410,70 @@ html, body {
 
 .table-wrapper {
     overflow-x: auto;
+    border-radius: var(--radio-borde);
+    background: #fff;
 }
 
 table {
     width: 100%;
-    border-collapse: collapse;
+    min-width: 720px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.94rem;
+}
+
+thead {
+    background: linear-gradient(135deg, rgba(0,128,128,0.95), rgba(0,102,204,0.95));
+    color: white;
 }
 
 th {
-    background-color: var(--color-fondo);
     text-align: left;
+    padding: 16px 18px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 2px solid rgba(255,255,255,0.2);
 }
 
 th, td {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--color-borde);
+    padding: 14px 18px;
+    border-bottom: 1px solid #e9ecef;
 }
 
-th {
-    font-weight: 600;
+td {
+    background: #ffffff;
     color: var(--color-texto);
+}
+
+tbody tr:nth-child(even) td {
+    background-color: #f8f9fa;
+}
+
+tbody tr:hover td {
+    background-color: #e9f7f7;
+}
+
+th:first-child,
+td:first-child {
+    padding-left: 24px;
+}
+
+th:last-child,
+td:last-child {
+    padding-right: 24px;
+}
+
+@media (max-width: 1024px) {
+    table {
+        min-width: 600px;
+    }
+}
+
+@media (max-width: 768px) {
+    table {
+        min-width: 520px;
+    }
 }
 
 /* ====== Alimento ====== */
