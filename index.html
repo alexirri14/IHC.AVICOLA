@@ -1,0 +1,678 @@
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Gestión Avícola</title>
+        <!-- Enlace a hoja de estilos -->
+        <link rel="stylesheet" href="styles.css">
+        <!-- Font Awesome para íconos -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    </head>
+    <body>
+        <!-- Contenedor principal -->
+        <div class="app-container">
+            <!-- Barra de navegación superior -->
+            <nav class="navbar">
+                <div class="navbar-brand">
+                    <i class="fas fa-egg"></i>
+                    <h1>Gestión Avícola</h1>
+                </div>
+                <!-- Botones de navegación para pantallas grandes -->
+                <div class="nav-links-desktop">
+                    <button class="nav-btn active" data-tab="dashboard">
+                        <i class="fas fa-home"></i> Dashboard
+                    </button>
+                    <button class="nav-btn" data-tab="produccion">
+                        <i class="fas fa-chart-line"></i> Producción
+                    </button>
+                    <button class="nav-btn" data-tab="almacen">
+                        <i class="fas fa-box"></i> Almacén Huevos
+                    </button>
+                    <button class="nav-btn" data-tab="alimento">
+                        <i class="fas fa-carrot"></i> Alimento
+                    </button>
+                    <button class="nav-btn" data-tab="molino">
+                        <i class="fas fa-cogs"></i> Molino
+                    </button>
+                    <button class="nav-btn" data-tab="ventas">
+                        <i class="fas fa-shopping-cart"></i> Ventas
+                    </button>
+                    <button class="nav-btn" data-tab="reportes">
+                        <i class="fas fa-chart-bar"></i> Reportes
+                    </button>
+                </div>
+                <!-- Botón para menú en móviles -->
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </nav>
+            <!-- Menú lateral para móviles -->
+            <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
+            <div class="mobile-menu" id="mobileMenu">
+                <div class="mobile-menu-header">
+                    <h2>Menú</h2>
+                    <button class="mobile-menu-close" id="mobileMenuClose">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <button class="mobile-nav-link active" data-tab="dashboard">
+                    <i class="fas fa-home"></i> Dashboard
+                </button>
+                <button class="mobile-nav-link" data-tab="produccion">
+                    <i class="fas fa-chart-line"></i> Producción
+                </button>
+                <button class="mobile-nav-link" data-tab="almacen">
+                    <i class="fas fa-box"></i> Almacén Huevos
+                </button>
+                <button class="mobile-nav-link" data-tab="alimento">
+                    <i class="fas fa-carrot"></i> Alimento
+                </button>
+                <button class="mobile-nav-link" data-tab="molino">
+                    <i class="fas fa-cogs"></i> Molino
+                </button>
+                <button class="mobile-nav-link" data-tab="ventas">
+                    <i class="fas fa-shopping-cart"></i> Ventas
+                </button>
+                <button class="mobile-nav-link" data-tab="reportes">
+                    <i class="fas fa-chart-bar"></i> Reportes
+                </button>
+            </div>
+
+            <!-- Área de contenido principal -->
+            <main class="content-area">
+                <!-- SECCIÓN DASHBOARD -->
+                <section class="tab-content active" id="tab-dashboard">
+                    <h2 class="section-title">Dashboard</h2>
+                    <!-- Tarjetas de métricas -->
+                    <div class="cards-grid">
+                        <div class="card">
+                            <div class="card-icon" style="background-color: #008080;">
+                                <i class="fas fa-egg"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Huevos Hoy</h3>
+                                <p id="dashboard-huevos-hoy">850</p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon" style="background-color: #0066cc;">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Stock Actual</h3>
+                                <p id="dashboard-stock">8,500</p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon" style="background-color: #28a745;">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Total Ventas</h3>
+                                <p id="dashboard-ventas">S/ 2,400</p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon" style="background-color: #ff8c00;">
+                                <i class="fas fa-carrot"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Stock Alimento</h3>
+                                <p id="dashboard-alimento">143 sacos</p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon" style="background-color: #6610f2;">
+                                <i class="fas fa-percentage"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Tasa Producción</h3>
+                                <p id="dashboard-tasa">100%</p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon" style="background-color: #17a2b8;">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Promedio Galpón</h3>
+                                <p id="dashboard-promedio">157 huevos</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Alertas -->
+                    <div class="alert-container" id="dashboard-alertas">
+                        <!-- Alertas se generan dinámicamente -->
+                    </div>
+                </section>
+
+                <!-- SECCIÓN PRODUCCIÓN -->
+                <section class="tab-content" id="tab-produccion">
+                    <h2 class="section-title">Registro de Producción</h2>
+                    <!-- Formulario de producción -->
+                    <div class="form-container">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="produccion-galpon">Galpón</label>
+                                <select id="produccion-galpon">
+                                    <option value="Galpón A">Galpón A</option>
+                                    <option value="Galpón B">Galpón B</option>
+                                    <option value="Galpón C">Galpón C</option>
+                                    <option value="Galpón D">Galpón D</option>
+                                    <option value="Galpón E">Galpón E</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="produccion-fecha">Fecha</label>
+                                <input type="date" id="produccion-fecha">
+                            </div>
+                            <div class="form-group">
+                                <label for="produccion-cantidad">Cantidad (huevos)</label>
+                                <input type="number" id="produccion-cantidad" min="0">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" id="btn-guardar-produccion">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                            <button class="btn btn-secondary" id="btn-cancelar-produccion">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Historial de producción -->
+                    <div class="table-container">
+                        <h3>Historial de Producción</h3>
+                        <div class="table-wrapper">
+                            <table id="tabla-produccion">
+                                <thead>
+                                    <tr>
+                                        <th>Galpón</th>
+                                        <th>Fecha</th>
+                                        <th>Huevos</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Filas generadas dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN ALMACÉN HUEVOS -->
+                <section class="tab-content" id="tab-almacen">
+                    <h2 class="section-title">Almacén de Huevos</h2>
+                    <!-- Formulario de ingreso -->
+                    <div class="form-container">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="almacen-galpon">Galpón Origen</label>
+                                <select id="almacen-galpon">
+                                    <option value="Galpón A">Galpón A</option>
+                                    <option value="Galpón B">Galpón B</option>
+                                    <option value="Galpón C">Galpón C</option>
+                                    <option value="Galpón D">Galpón D</option>
+                                    <option value="Galpón E">Galpón E</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="almacen-cantidad">Cantidad (huevos)</label>
+                                <input type="number" id="almacen-cantidad" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="almacen-responsable">Responsable</label>
+                                <input type="text" id="almacen-responsable" placeholder="Nombre del responsable">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" id="btn-guardar-almacen">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                            <button class="btn btn-secondary" id="btn-cancelar-almacen">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Resumen de stock -->
+                    <div class="summary-container">
+                        <h3>Stock Actual: <span id="almacen-stock">8,500 huevos</span></h3>
+                    </div>
+                    <!-- Historial de movimientos -->
+                    <div class="table-container">
+                        <h3>Historial de Ingresos</h3>
+                        <div class="table-wrapper">
+                            <table id="tabla-almacen">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Galpón Origen</th>
+                                        <th>Cantidad</th>
+                                        <th>Responsable</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Filas generadas dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN ALIMENTO -->
+                <section class="tab-content" id="tab-alimento">
+                    <h2 class="section-title">Gestión de Alimento</h2>
+                    <!-- Tarjetas de categorías de insumos -->
+                    <div class="alimento-categories">
+                        <!-- Categoría: Sacos de 50kg -->
+                        <div class="alimento-category">
+                            <h3 style="color: #0066cc;"><i class="fas fa-seedling"></i> Sacos de 50kg</h3>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">MAÍZ</div>
+                                    <div class="insumo-type">sacos de 50kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="MAIZ">100</div>
+                                    <div class="insumo-stock-total">5000 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">HARINA DE SOYA</div>
+                                    <div class="insumo-type">sacos de 50kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="HARINA DE SOYA">50</div>
+                                    <div class="insumo-stock-total">2500 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">SOYA INTEGRAL</div>
+                                    <div class="insumo-type">sacos de 50kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="SOYA INTEGRAL">30</div>
+                                    <div class="insumo-stock-total">1500 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">PALMISTE</div>
+                                    <div class="insumo-type">sacos de 50kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="PALMISTE">15</div>
+                                    <div class="insumo-stock-total">750 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">SAL INDUSTRIAL</div>
+                                    <div class="insumo-type">sacos de 50kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="SAL INDUSTRIAL">10</div>
+                                    <div class="insumo-stock-total">500 kg</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Categoría: Sacos de 25kg -->
+                        <div class="alimento-category">
+                            <h3 style="color: #6610f2;"><i class="fas fa-grain"></i> Sacos de 25kg</h3>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">PHOSBIC</div>
+                                    <div class="insumo-type">sacos de 25kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="PHOSBIC">30</div>
+                                    <div class="insumo-stock-total">750 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">CAL FINA</div>
+                                    <div class="insumo-type">sacos de 25kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="CAL FINA">20</div>
+                                    <div class="insumo-stock-total">500 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">CAL GRUESA</div>
+                                    <div class="insumo-type">sacos de 25kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="CAL GRUESA">25</div>
+                                    <div class="insumo-stock-total">625 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">BICARBONATO</div>
+                                    <div class="insumo-type">sacos de 25kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="BICARBONATO">10</div>
+                                    <div class="insumo-stock-total">250 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">PRE POSTURA</div>
+                                    <div class="insumo-type">sacos de 25kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="PRE POSTURA">8</div>
+                                    <div class="insumo-stock-total">200 kg</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Categoría: Aceite y aditivos -->
+                        <div class="alimento-category">
+                            <h3 style="color: #ff8c00;"><i class="fas fa-tint"></i> Aceite y Aditivos</h3>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">ACEITE DE SOYA</div>
+                                    <div class="insumo-type">bidones de 100L</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="ACEITE DE SOYA">20</div>
+                                    <div class="insumo-stock-total">2000 L</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">METIONINA</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="METIONINA">50</div>
+                                    <div class="insumo-stock-total">50 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">LISINA</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="LISINA">25</div>
+                                    <div class="insumo-stock-total">25 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">BIO+COLINA</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="BIO+COLINA">10</div>
+                                    <div class="insumo-stock-total">10 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">MICOFIX 300</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="MICOFIX 300">5</div>
+                                    <div class="insumo-stock-total">5 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">SECUESTRANTE</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="SECUESTRANTE">8</div>
+                                    <div class="insumo-stock-total">8 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">TOXONINA</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="TOXONINA">6</div>
+                                    <div class="insumo-stock-total">6 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">LIPIOSA</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="LIPIOSA">4</div>
+                                    <div class="insumo-stock-total">4 kg</div>
+                                </div>
+                            </div>
+                            <div class="insumo-card">
+                                <div class="insumo-left">
+                                    <div class="insumo-name">ADITRACE</div>
+                                    <div class="insumo-type">kg</div>
+                                </div>
+                                <div class="insumo-right">
+                                    <div class="insumo-stock" data-insumo="ADITRACE">2</div>
+                                    <div class="insumo-stock-total">2 kg</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN MOLINO -->
+                <section class="tab-content" id="tab-molino">
+                    <h2 class="section-title">Producción de Alimento - Molino</h2>
+                    <!-- Formulario de molino -->
+                    <div class="form-container">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="molino-formula">Tipo de Galpón</label>
+                                <select id="molino-formula">
+                                    <option value="GALPON 4 (POSTURA 1) - 839/154">GALPON 4 (POSTURA 1) - 839/154</option>
+                                    <option value="GALPON (6-8GT) (POSTURA 2) - 907/182">GALPON (6-8GT) (POSTURA 2) - 907/182</option>
+                                    <option value="GALPON (3-5-8) (POSTURA 3) - 949/217">GALPON (3-5-8) (POSTURA 3) - 949/217</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="molino-fecha">Fecha de Producción</label>
+                                <input type="date" id="molino-fecha">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="btn-cargar-formula" style="margin-bottom: 20px;">
+                            <i class="fas fa-calculator"></i> Cargar Fórmula
+                        </button>
+                        <!-- Detalles de la fórmula -->
+                        <div class="formula-details" id="formula-details">
+                            <!-- Se genera dinámicamente -->
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" id="btn-registrar-molino">
+                                <i class="fas fa-save"></i> Registrar Producción
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Historial del molino -->
+                    <div class="table-container">
+                        <h3>Historial de Producción</h3>
+                        <div class="table-wrapper">
+                            <table id="tabla-molino">
+                                <thead>
+                                    <tr>
+                                        <th>Lote</th>
+                                        <th>Fecha</th>
+                                        <th>Galpón</th>
+                                        <th>Total Producido</th>
+                                        <th>Observaciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Filas generadas dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN VENTAS -->
+                <section class="tab-content" id="tab-ventas">
+                    <h2 class="section-title">Registro de Ventas</h2>
+                    <!-- Formulario de ventas -->
+                    <div class="form-container">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="ventas-cliente">Cliente</label>
+                                <input type="text" id="ventas-cliente" placeholder="Nombre del cliente">
+                            </div>
+                            <div class="form-group">
+                                <label for="ventas-cantidad">Cantidad (huevos)</label>
+                                <input type="number" id="ventas-cantidad" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="ventas-precio">Precio Unitario (S/)</label>
+                                <input type="number" id="ventas-precio" min="0" step="0.01" value="0.40">
+                            </div>
+                        </div>
+                        <!-- Total calculado -->
+                        <div class="total-display" id="ventas-total-display">
+                            Total: S/ 0.00
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" id="btn-guardar-venta">
+                                <i class="fas fa-save"></i> Registrar Venta
+                            </button>
+                            <button class="btn btn-secondary" id="btn-cancelar-venta">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Total ventas -->
+                    <div class="summary-container">
+                        <div class="total-big">
+                            <div class="total-icon">
+                                <i class="fas fa-dollar-sign"></i>
+                            </div>
+                            <div class="total-content">
+                                <div class="total-label">Total de Ventas</div>
+                                <div class="total-value" id="ventas-total">S/ 7,288.00</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Historial de ventas -->
+                    <div class="table-container">
+                        <h3>Historial de Ventas</h3>
+                        <div class="table-wrapper">
+                            <table id="tabla-ventas">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Cliente</th>
+                                        <th>Cantidad</th>
+                                        <th>P. Unit.</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Filas generadas dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN REPORTES -->
+                <section class="tab-content" id="tab-reportes">
+                    <h2 class="section-title">Reportes</h2>
+                    <!-- Botones de pestañas de reportes -->
+                    <div class="report-tabs">
+                        <button class="report-tab-btn active" data-report="produccion">Producción por Galpón</button>
+                        <button class="report-tab-btn" data-report="ventas">Ventas Diarias</button>
+                        <button class="report-tab-btn" data-report="stock">Stock Actual</button>
+                    </div>
+                    <!-- Contenedor de reportes -->
+                    <div class="report-content">
+                        <!-- Reporte de Producción -->
+                        <div class="report-tab-content active" id="report-produccion">
+                            <h3>Producción por Galpón</h3>
+                            <!-- Gráfico de producción -->
+                            <div class="chart-container">
+                                <canvas id="chart-produccion"></canvas>
+                            </div>
+                            <!-- Tabla -->
+                            <div class="table-wrapper">
+                                <table id="tabla-reportes-produccion">
+                                    <thead>
+                                        <tr>
+                                            <th>Galpón</th>
+                                            <th>Producción Diaria</th>
+                                            <th>Producción Semanal</th>
+                                            <th>Promedio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Filas generadas dinámicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Reporte de Ventas -->
+                        <div class="report-tab-content" id="report-ventas">
+                            <h3>Ventas Diarias</h3>
+                            <!-- Gráfico de ventas -->
+                            <div class="chart-container">
+                                <canvas id="chart-ventas"></canvas>
+                            </div>
+                            <!-- Resumen de ventas -->
+                            <div class="summary-cards">
+                                <div class="summary-card" style="background-color: #e6ffe6;">
+                                    <p>Total Semanal</p>
+                                    <h3 id="reportes-ventas-total">S/ 6,400</h3>
+                                </div>
+                                <div class="summary-card" style="background-color: #e6f0ff;">
+                                    <p>Promedio Diario</p>
+                                    <h3 id="reportes-ventas-promedio">S/ 914.29</h3>
+                                </div>
+                                <div class="summary-card" style="background-color: #f3e6ff;">
+                                    <p>Mejor Día</p>
+                                    <h3 id="reportes-ventas-mejor">S/ 1200</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Reporte de Stock -->
+                        <div class="report-tab-content" id="report-stock">
+                            <h3>Stock Actual</h3>
+                            <!-- Gráfico circular de stock -->
+                            <div class="chart-container">
+                                <canvas id="chart-stock"></canvas>
+                            </div>
+                            <!-- Resumen de stock -->
+                            <div class="summary-cards">
+                                <div class="summary-card" style="background-color: #e6fff3;">
+                                    <p>Huevos en Stock</p>
+                                    <h3 id="reportes-stock-huevos">8,500</h3>
+                                </div>
+                                <div class="summary-card" style="background-color: #fff3e6;">
+                                    <p>Alimento en Stock</p>
+                                    <h3 id="reportes-stock-alimento">143 sacos</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Enlace al script -->
+        <script src="script.js"></script>
+    </body>
+    </html>
