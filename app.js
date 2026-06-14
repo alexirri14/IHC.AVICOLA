@@ -18,7 +18,6 @@ const STOCK_MINIMO_JABAS = 10;
 let INSUMOS_INFO = {
     "MAIZ": { cantidadInicial: 100, unidadCompra: "toneladas", kgPorUnidad: 1000, etiqueta: "Granel" },
     "TORTA DE SOYA": { cantidadInicial: 50, unidadCompra: "toneladas", kgPorUnidad: 1000, etiqueta: "Granel" },
-    "SOYA INTEGRAL": { cantidadInicial: 0, unidadCompra: "toneladas", kgPorUnidad: 1000, etiqueta: "Granel" },
     "PALMISTE": { cantidadInicial: 15, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
     "CAL FINA": { cantidadInicial: 25, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
     "CAL GRUESO": { cantidadInicial: 35, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
