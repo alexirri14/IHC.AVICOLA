@@ -1,622 +1,309 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Avícola - Requerimientos IHC</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ERP Avícola - El Rancho del Buen Pastor</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-    <!-- LOGIN -->
-    <section id="login-screen" class="login-screen">
-        <div class="login-card">
-            <h1>🐔 Sistema Avícola</h1>
-            <p>El Rancho del Buen Pastor</p>
-
-            <label>Usuario</label>
-            <input type="text" id="login-user" placeholder="admin, produccion, almacen o ventas">
-
-            <label>Contraseña</label>
-            <input type="password" id="login-pass" placeholder="123">
-
-            <button id="btn-login" class="btn btn-primary">Ingresar</button>
-
-            <small>
-                Usuarios de prueba: admin/123, produccion/123, almacen/123, ventas/123
-            </small>
-        </div>
-    </section>
-
-    <!-- APLICACIÓN -->
-    <div id="app" class="app-container hidden">
-
-        <header class="navbar">
-            <div>
-                <h1>🐔 Sistema Avícola</h1>
-                <span>El Rancho del Buen Pastor</span>
-            </div>
-
-            <div class="top-actions">
-                <button id="btn-text-small" class="btn btn-light">A-</button>
-                <button id="btn-text-big" class="btn btn-light">A+</button>
-                <button id="btn-text-reset" class="btn btn-light">Normal</button>
-                <span id="user-role" class="role-badge"></span>
-                <button id="btn-logout" class="btn btn-danger">Salir</button>
-            </div>
-        </header>
-
-        <nav class="menu">
-            <button class="nav-btn active" data-tab="dashboard">Panel Principal</button>
-            <button class="nav-btn" data-tab="produccion">Producción</button>
-            <button class="nav-btn" data-tab="almacen-huevos">Almacén Huevos</button>
-            <button class="nav-btn" data-tab="almacen-alimento">Almacén Alimento</button>
-            <button class="nav-btn" data-tab="molino">Molino</button>
-            <button class="nav-btn" data-tab="ventas">Ventas</button>
-            <button class="nav-btn" data-tab="admin">Administrador</button>
-        </nav>
-
-        <main class="content">
-
-            <!-- PANEL PRINCIPAL -->
-            <section id="tab-dashboard" class="tab-content active">
-                <h2>Panel Principal</h2>
-
-                <div class="cards-grid">
-                    <div class="card">
-                        <span>Producción diaria</span>
-                        <strong id="dash-produccion-hoy">0 jabas</strong>
-                    </div>
-                    <div class="card">
-                        <span>Stock actual de jabas</span>
-                        <strong id="dash-stock-jabas">0 jabas</strong>
-                    </div>
-                    <div class="card">
-                        <span>Ventas del día</span>
-                        <strong id="dash-ventas-hoy">S/ 0.00</strong>
-                    </div>
-                    <div class="card">
-                        <span>Stock alimento balanceado</span>
-                        <strong id="dash-stock-alimento">0 sacos</strong>
-                    </div>
-                </div>
-
-                <div class="box">
-                    <h3>Alertas</h3>
-                    <div id="dashboard-alertas"></div>
-                </div>
-
-                <div class="box">
-                    <h3>Cierre diario</h3>
-                    <p>Cuando se cierra el día, ya no se permiten nuevos registros con esa fecha.</p>
-                    <button id="btn-cerrar-dia" class="btn btn-warning">Cerrar día actual</button>
-                    <p id="dias-cerrados" class="small-text"></p>
-                </div>
-            </section>
-
-            <!-- PRODUCCIÓN -->
-            <section id="tab-produccion" class="tab-content">
-                <h2>Producción</h2>
-
-                <div class="box">
-                    <h3>Registro diario de producción</h3>
-
-                    <div class="form-grid">
-                        <div>
-                            <label>Fecha</label>
-                            <input type="date" id="prod-fecha">
-                        </div>
-                        <div>
-                            <label>Galpón</label>
-                            <select id="prod-galpon">
-                                <option>Galpón 4</option>
-                                <option>Galpón 5</option>
-                                <option>Galpón 6</option>
-                                <option>Galpón 8</option>
-                                <option>Galpón Automático</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label>Jabas de primera</label>
-                            <input type="number" id="prod-jabas-primera" min="0" value="0" placeholder="Ej: 25">
-                        </div>
-                        <div>
-                            <label>Jabas de segunda</label>
-                            <input type="number" id="prod-jabas-segunda" min="0" value="0" placeholder="Ej: 5">
-                        </div>
-                        <div>
-                            <label>Gallinas muertas</label>
-                            <input type="number" id="prod-muertas" min="0" value="0">
-                        </div>
-                    </div>
-
-                    <button id="btn-guardar-produccion" class="btn btn-primary">Guardar producción</button>
-                </div>
-
-                <div class="box">
-                    <h3>Buscar producción por fecha o galpón</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Fecha</label>
-                            <input type="date" id="filtro-prod-fecha">
-                        </div>
-                        <div>
-                            <label>Galpón</label>
-                            <select id="filtro-prod-galpon">
-                                <option value="">Todos</option>
-                                <option>Galpón 4</option>
-                                <option>Galpón 5</option>
-                                <option>Galpón 6</option>
-                                <option>Galpón 8</option>
-                                <option>Galpón Automático</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button id="btn-filtrar-produccion" class="btn btn-secondary">Filtrar</button>
-                    <button id="btn-limpiar-filtro-produccion" class="btn btn-light">Ver todo</button>
-                </div>
-
-                <div class="table-box">
-                    <h3>Producción registrada</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Galpón</th>
-                                <th>Primera</th>
-                                <th>Segunda</th>
-                                <th>Total jabas</th>
-                                <th>Muertas</th>
-                                <th>Gallinas restantes</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-produccion"></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- ALMACÉN HUEVOS -->
-            <section id="tab-almacen-huevos" class="tab-content">
-                <h2>Almacén de Huevos</h2>
-
-                <div class="cards-grid">
-                    <div class="card">
-                        <span>Stock vendible total</span>
-                        <strong id="almacen-stock-jabas">0 jabas</strong>
-                    </div>
-                    <div class="card">
-                        <span>Primera</span>
-                        <strong id="almacen-stock-primera">0 jabas</strong>
-                    </div>
-                    <div class="card">
-                        <span>Segunda</span>
-                        <strong id="almacen-stock-segunda">0 jabas</strong>
-                    </div>
-                </div>
-
-
-                <div class="table-box">
-                    <h3>Historial de movimientos</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Tipo</th>
-                                <th>Detalle</th>
-                                <th>Primera</th>
-                                <th>Segunda</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-almacen-huevos"></tbody>
-                    </table>
-                </div></section>
-
-            <!-- ALMACÉN ALIMENTO -->
-            <section id="tab-almacen-alimento" class="tab-content">
-                <h2>Almacén de Alimento</h2>
-
-                
-
-                <div class="box">
-                    <h3>Ingreso de insumos al almacén</h3>
-
-                    <div class="form-grid">
-                        <div>
-                            <label>Insumo</label>
-                            <select id="insumo-nombre"></select>
-                            <small class="small-text">El sistema convierte automáticamente a kg según la presentación del insumo.</small>
-                        </div>
-                        <div>
-                            <label>Cantidad según unidad de compra</label>
-                            <input type="number" id="insumo-kg" min="1" step="0.01" placeholder="Ej: 2">
-                            <small class="small-text">Ejemplo: 2 toneladas, 2 sacos o 2 tanques, según el insumo.</small>
-                        </div>
-                    </div>
-
-                    <button id="btn-ingresar-insumo" class="btn btn-primary">Registrar ingreso</button>
-                </div>
-
-                <div class="box">
-                    <h3>Distribución / consumo de alimento por galpón</h3>
-
-                    <div class="form-grid">
-                        <div>
-                            <label>Galpón</label>
-                            <select id="consumo-galpon">
-                                <option>Galpón 4</option>
-                                <option>Galpón 5</option>
-                                <option>Galpón 6</option>
-                                <option>Galpón 8</option>
-                                <option>Galpón Automático</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label>Sacos a entregar</label>
-                            <input type="number" id="consumo-kg" min="1" placeholder="Ej: 2">
-                            <small class="small-text">Cada saco equivale a 50 kg. La salida queda registrada obligatoriamente.</small>
-                        </div>
-                    </div>
-
-                    <button id="btn-consumir-alimento" class="btn btn-warning">Registrar consumo</button>
-                </div>
-
-                <div class="cards-grid">
-                    <div class="card">
-                        <span>Stock de insumos</span>
-                        <strong id="stock-insumos-total">0 kg</strong>
-                    </div>
-                    <div class="card">
-                        <span>Alimento balanceado producido</span>
-                        <strong id="stock-balanceado-total">0 sacos</strong>
-                    </div>
-                </div>
-
-                <div class="table-box">
-                    <h3>Stock de insumos</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Insumo</th>
-                                <th>Presentación</th>
-                                <th>Stock disponible</th>
-                                <th>Equivalente en kg</th>
-                                <th>Stock mínimo</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-insumos"></tbody>
-                    </table>
-                </div>
-
-                <div class="table-box">
-                    <h3>Stock disponible de alimento por galpón</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Galpón / Fórmula</th>
-                                <th>Sacos de 50 kg</th>
-                                <th>Kg disponibles</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-balanceado"></tbody>
-                    </table>
-                </div>
-
-                <div class="table-box">
-                    <h3>Historial de alimento</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Tipo</th>
-                                <th>Detalle</th>
-                                <th>Cantidad</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-alimento-mov"></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- MOLINO -->
-            <section id="tab-molino" class="tab-content">
-                <h2>Molino</h2>
-
-                <div class="box">
-                    <h3>Producción de alimento balanceado</h3>
-
-                    <div class="form-grid">
-                        <div>
-                            <label>Fecha</label>
-                            <input type="date" id="molino-fecha">
-                        </div>
-                        <div>
-                            <label>Galpón destino</label>
-                            <select id="molino-galpon"></select>
-                            <small class="small-text">Seleccione el galpón y el sistema cargará la fórmula automáticamente.</small>
-                        </div>
-                        <div>
-                            <label>Fórmula cargada</label>
-                            <input type="text" id="molino-formula-actual" readonly placeholder="Se cargará automáticamente">
-                        </div>
-                        <div>
-                            <label>Cantidad de tandas</label>
-                            <input type="number" id="molino-kg" min="1" step="1" placeholder="Ej: 1">
-                            <small class="small-text">1 tanda produce 30 sacos de alimento de 50 kg.</small>
-                        </div>
-                    </div>
-
-                    <button id="btn-ver-formula" class="btn btn-secondary">Ver insumos</button>
-                    <button id="btn-producir-molino" class="btn btn-primary">Producir alimento</button>
-                </div>
-
-                <div class="box">
-                    <h3>Insumos que se usarán</h3>
-                    <div id="formula-preview" class="formula-preview"></div>
-                </div>
-
-                <div class="table-box">
-                    <h3>Historial de producción del molino</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Galpón destino</th>
-                                <th>Tandas</th>
-                                <th>Sacos producidos</th>
-                                <th>Kg producidos</th>
-                                <th>Insumos usados</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-molino"></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- VENTAS -->
-            <section id="tab-ventas" class="tab-content">
-                <h2>Ventas</h2>
-
-                <div class="cards-grid">
-                    <div class="card">
-                        <span>Stock disponible total</span>
-                        <strong id="ventas-stock-total">0 jabas</strong>
-                    </div>
-                    <div class="card">
-                        <span>Primera disponible</span>
-                        <strong id="ventas-stock-primera">0 jabas</strong>
-                    </div>
-                    <div class="card">
-                        <span>Segunda disponible</span>
-                        <strong id="ventas-stock-segunda">0 jabas</strong>
-                    </div>
-                </div>
-
-                <div class="box">
-                    <h3>Registrar venta</h3>
-
-                    <div class="form-grid">
-                        <div>
-                            <label>Cliente</label>
-                            <input type="text" id="venta-cliente" placeholder="Nombre del cliente">
-                        </div>
-                        <div>
-                            <label>Fecha</label>
-                            <input type="date" id="venta-fecha">
-                        </div>
-                        <div>
-                            <label>Jabas de primera</label>
-                            <input type="number" id="venta-primera" min="0" value="0">
-                        </div>
-                        <div>
-                            <label>Jabas de segunda</label>
-                            <input type="number" id="venta-segunda" min="0" value="0">
-                        </div>
-                        <div>
-                            <label>Total de jabas</label>
-                            <input type="number" id="venta-total-jabas" readonly value="0">
-                        </div>
-                        <div>
-                            <label>Promedio kg por jaba</label>
-                            <input type="number" id="venta-promedio-kg-jaba" min="0" step="0.01" value="18">
-                        </div>
-                        <div>
-                            <label>Peso total kg</label>
-                            <input type="number" id="venta-peso" readonly value="0">
-                        </div>
-                        <div>
-                            <label>Precio por kg</label>
-                            <input type="number" id="venta-precio" min="0.1" step="0.01" value="6.00">
-                        </div>
-                    </div>
-
-                    <div class="total-display" id="venta-total">Total: S/ 0.00</div>
-
-                    <button id="btn-guardar-venta" class="btn btn-primary">Registrar venta</button>
-                </div>
-
-                <div class="table-box">
-                    <h3>Historial de ventas</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Cliente</th>
-                                <th>Primera</th>
-                                <th>Segunda</th>
-                                <th>Total jabas</th>
-                                <th>Prom. kg/jaba</th>
-                                <th>Peso kg</th>
-                                <th>Precio kg</th>
-                                <th>Total</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-ventas"></tbody>
-                    </table>
-                </div>
-            </section>
-
-
-            <!-- ADMINISTRADOR -->
-            <section id="tab-admin" class="tab-content">
-                <h2>Administrador</h2>
-
-               
-
-                <div class="box">
-                    <h3>Agregar nuevo galpón</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Nombre del galpón</label>
-                            <input type="text" id="admin-galpon-nombre" placeholder="Ej: Galpón 10">
-                        </div>
-                        <div>
-                            <label>Cantidad inicial de gallinas</label>
-                            <input type="number" id="admin-galpon-gallinas" min="0" placeholder="Ej: 12000">
-                        </div>
-                    </div>
-                    <button id="btn-admin-agregar-galpon" class="btn btn-primary">Agregar galpón</button>
-                </div>
-
-                <div class="box">
-                    <h3>Editar galpón existente</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Galpón actual</label>
-                            <select id="admin-galpon-editar-select"></select>
-                        </div>
-                        <div>
-                            <label>Nuevo nombre</label>
-                            <input type="text" id="admin-galpon-editar-nombre" placeholder="Ej: Galpón 4 Norte">
-                        </div>
-                        <div>
-                            <label>Nueva cantidad de gallinas</label>
-                            <input type="number" id="admin-galpon-editar-gallinas" min="0">
-                        </div>
-                    </div>
-                    <button id="btn-admin-cargar-galpon" class="btn btn-secondary">Cargar datos</button>
-                    <button id="btn-admin-guardar-galpon" class="btn btn-primary">Guardar cambios</button>
-                </div>
-
-                <div class="box">
-                    <h3>Eliminar galpón</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Seleccione el galpón</label>
-                            <select id="admin-galpon-eliminar"></select>
-                        </div>
-                    </div>
-                    <button id="btn-admin-eliminar-galpon" class="btn btn-danger">Eliminar galpón</button>
-                </div>
-
-                <div class="table-box">
-                    <h3>Galpones registrados</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Gallinas actuales</th>
-                                <th>Fórmula registrada</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-galpones"></tbody>
-                    </table>
-                </div>
-
-                <div class="box separador-admin">
-                    <h3>Agregar insumo</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Nombre del insumo</label>
-                            <input type="text" id="nuevo-insumo-nombre" placeholder="Ej: AFRECHO">
-                        </div>
-                        <div>
-                            <label>Presentación</label>
-                            <select id="nuevo-insumo-presentacion">
-                                <option value="toneladas">Toneladas</option>
-                                <option value="sacos50">Sacos de 50 kg</option>
-                                <option value="tanques1000">Tanques de 1000 L</option>
-                                <option value="sacos25">Sacos de 25 kg</option>
-                                <option value="kg">Kilogramos</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label>Stock inicial</label>
-                            <input type="number" id="nuevo-insumo-stock" min="0" step="0.01" value="0">
-                        </div>
-                    </div>
-                    <button id="btn-agregar-insumo" class="btn btn-primary">Agregar insumo</button>
-                </div>
-
-                <div class="box">
-                    <h3>Eliminar insumo</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Insumo</label>
-                            <select id="admin-insumo-eliminar"></select>
-                        </div>
-                    </div>
-                    <button id="btn-eliminar-insumo" class="btn btn-danger">Eliminar insumo</button>
-                    <p class="small-text">Al eliminar un insumo, también se quita de todas las fórmulas donde esté registrado.</p>
-                </div>
-
-                <div class="box">
-                    <h3>Editar fórmula de preparación</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Fórmula</label>
-                            <select id="edit-formula"></select>
-                        </div>
-                        <div>
-                            <label>Galpón destino</label>
-                            <input type="text" id="edit-formula-destino" placeholder="Ej: Galpón 4">
-                        </div>
-                    </div>
-                    <button id="btn-guardar-formula-destino" class="btn btn-secondary">Guardar destino</button>
-
-                    <hr class="separador">
-
-                    <div class="form-grid">
-                        <div>
-                            <label>Insumo de la fórmula</label>
-                            <select id="edit-formula-insumo"></select>
-                        </div>
-                        <div>
-                            <label>Kg usados por tanda</label>
-                            <input type="number" id="edit-formula-kg" min="0" step="0.01" placeholder="Ej: 839">
-                        </div>
-                    </div>
-                    <button id="btn-agregar-formula-insumo" class="btn btn-primary">Agregar / actualizar insumo</button>
-                    <button id="btn-quitar-formula-insumo" class="btn btn-danger">Quitar insumo</button>
-
-                    <div id="editor-formula-preview" class="formula-preview formula-editor-preview"></div>
-                </div>
-
-                <div class="box">
-                    <h3>Crear o eliminar fórmula</h3>
-                    <div class="form-grid">
-                        <div>
-                            <label>Nombre de nueva fórmula</label>
-                            <input type="text" id="nueva-formula-nombre" placeholder="Ej: GALPON 10">
-                        </div>
-                        <div>
-                            <label>Galpón destino</label>
-                            <input type="text" id="nueva-formula-destino" placeholder="Ej: Galpón 10">
-                        </div>
-                    </div>
-                    <button id="btn-crear-formula" class="btn btn-primary">Crear fórmula</button>
-                    <button id="btn-eliminar-formula" class="btn btn-danger">Eliminar fórmula seleccionada</button>
-                </div>
-            </section>
-
-        </main>
-
-        <div id="mensaje" class="mensaje hidden"></div>
+  <!-- LOGIN -->
+  <section id="login-screen" class="login-screen">
+    <div class="login-card">
+      <h1>Sistema Avícola ERP</h1>
+      <p>El Rancho del Buen Pastor</p>
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="admin, produccion, almacen o ventas">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="123">
+      <button id="btn-login" class="btn btn-primary">Ingresar</button>
+      <small>Usuarios: admin/123, produccion/123, almacen/123, ventas/123</small>
     </div>
+  </section>
 
-    <script src="app.js"></script>
+  <!-- APP -->
+  <div id="app" class="app-container hidden">
+    <header class="navbar">
+      <div><h1>Sistema Avícola ERP</h1><span>El Rancho del Buen Pastor</span></div>
+      <div class="top-actions">
+        <span id="user-role" class="role-badge"></span>
+        <button id="btn-logout" class="btn btn-danger">Salir</button>
+      </div>
+    </header>
+
+    <nav class="menu" id="main-menu">
+      <button class="nav-btn active" data-tab="dashboard">Panel</button>
+      <button class="nav-btn" data-tab="produccion">Producción</button>
+      <button class="nav-btn" data-tab="almacen-huevos">Almacén Huevos</button>
+      <button class="nav-btn" data-tab="almacen-alimento">Almacén Insumos</button>
+      <button class="nav-btn" data-tab="molino">Molino</button>
+      <button class="nav-btn" data-tab="ventas">Ventas</button>
+      <button class="nav-btn" data-tab="clientes">Clientes</button>
+      <button class="nav-btn" data-tab="proveedores">Proveedores</button>
+      <button class="nav-btn" data-tab="compras">Compras</button>
+      <button class="nav-btn" data-tab="empleados">Empleados</button>
+      <button class="nav-btn" data-tab="admin">Admin</button>
+      <button class="nav-btn" data-tab="reportes">Reportes</button>
+      <button class="nav-btn" data-tab="alertas">Alertas</button>
+    </nav>
+
+    <main class="content">
+
+      <!-- DASHBOARD -->
+      <section id="tab-dashboard" class="tab-content active">
+        <h2>Panel Principal</h2>
+        <div class="cards-grid">
+          <div class="card"><span>Producción hoy</span><strong id="dash-produccion-hoy">0 jabas</strong></div>
+          <div class="card"><span>Stock jabas</span><strong id="dash-stock-jabas">0 jabas</strong></div>
+          <div class="card"><span>Ventas hoy</span><strong id="dash-ventas-hoy">S/ 0.00</strong></div>
+          <div class="card"><span>Stock alimento</span><strong id="dash-stock-alimento">0 sacos</strong></div>
+        </div>
+        <div class="box"><h3>Alertas</h3><div id="dashboard-alertas"></div></div>
+        <div class="box">
+          <h3>Cierre diario</h3>
+          <p>Al cerrar el día no se permiten más registros con esa fecha.</p>
+          <button id="btn-cerrar-dia" class="btn btn-warning">Cerrar día actual</button>
+          <p id="dias-cerrados" class="small-text"></p>
+        </div>
+      </section>
+
+      <!-- PRODUCCIÓN -->
+      <section id="tab-produccion" class="tab-content">
+        <h2>Producción</h2>
+        <div class="box">
+          <h3>Registrar producción</h3>
+          <div class="form-grid">
+            <div><label>Fecha</label><input type="date" id="prod-fecha"></div>
+            <div><label>Galpón</label><select id="prod-galpon"></select></div>
+            <div><label>Jabas primera</label><input type="number" id="prod-jabas-primera" min="0" step="0.5" value="0"></div>
+            <div><label>Jabas segunda</label><input type="number" id="prod-jabas-segunda" min="0" step="0.5" value="0"></div>
+            <div><label>Total paquetes</label><input type="text" id="prod-total-paquetes" readonly value="0"></div>
+            <div><label>Gallinas muertas</label><input type="number" id="prod-muertas" min="0" value="0"></div>
+          </div>
+          <button id="btn-guardar-produccion" class="btn btn-primary">Guardar producción</button>
+        </div>
+        <div class="box">
+          <h3>Filtros</h3>
+          <div class="form-grid">
+            <div><label>Fecha</label><input type="date" id="filtro-prod-fecha"></div>
+            <div><label>Galpón</label><select id="filtro-prod-galpon"><option value="">Todos</option></select></div>
+          </div>
+          <button id="btn-filtrar-produccion" class="btn btn-secondary">Filtrar</button>
+          <button id="btn-limpiar-filtro-produccion" class="btn btn-light">Limpiar</button>
+        </div>
+        <div class="table-box">
+          <h3>Historial</h3>
+          <table><thead><tr><th>Fecha</th><th>Galpón</th><th>Primera</th><th>Segunda</th><th>Total jabas</th><th>Paquetes</th><th>Muertas</th><th>Gallinas rest.</th><th>Acción</th></tr></thead><tbody id="tabla-produccion"></tbody></table>
+        </div>
+      </section>
+
+      <!-- ALMACÉN HUEVOS -->
+      <section id="tab-almacen-huevos" class="tab-content">
+        <h2>Almacén de Huevos</h2>
+        <div class="cards-grid" id="huevos-stock-cards">
+          <div class="card"><span>Stock vendible total</span><strong id="almacen-stock-jabas">0</strong></div>
+          <div class="card"><span>Primera</span><strong id="almacen-stock-primera">0</strong></div>
+          <div class="card"><span>Segunda</span><strong id="almacen-stock-segunda">0</strong></div>
+        </div>
+        <div class="box aviso-automatico" id="clasificacion-segunda-box">
+          <h3>Clasificación de jabas de segunda</h3>
+          <div id="cards-clases-segunda" class="cards-grid mini-cards"></div>
+        </div>
+        <div class="table-box">
+          <h3>Movimientos</h3>
+          <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th>Primera</th><th>Segunda</th><th>Total</th></tr></thead><tbody id="tabla-almacen-huevos"></tbody></table>
+        </div>
+      </section>
+
+      <!-- ALMACÉN INSUMOS -->
+      <section id="tab-almacen-alimento" class="tab-content">
+        <h2>Almacén de Insumos</h2>
+        <div class="box">
+          <h3>Ingreso de insumos</h3>
+          <div class="form-grid">
+            <div><label>Insumo</label><select id="insumo-nombre"></select></div>
+            <div><label>Cantidad (kg)</label><input type="number" id="insumo-kg" min="0.1" step="0.1"></div>
+          </div>
+          <button id="btn-ingresar-insumo" class="btn btn-primary">Registrar ingreso</button>
+        </div>
+        <div class="box">
+          <h3>Consumo de alimento por galpón</h3>
+          <div class="form-grid">
+            <div><label>Galpón</label><select id="consumo-galpon"></select></div>
+            <div><label>Sacos (50 kg)</label><input type="number" id="consumo-kg" min="1"></div>
+          </div>
+          <button id="btn-consumir-alimento" class="btn btn-warning">Registrar consumo</button>
+        </div>
+        <div class="cards-grid">
+          <div class="card"><span>Stock total insumos</span><strong id="stock-insumos-total">0 kg</strong></div>
+          <div class="card"><span>Alimento balanceado</span><strong id="stock-balanceado-total">0 sacos</strong></div>
+        </div>
+        <div class="table-box">
+          <h3>Stock de insumos</h3>
+          <table><thead><tr><th>Estado</th><th>Insumo</th><th>Stock</th><th>Mínimo</th><th>Lectura</th></tr></thead><tbody id="tabla-insumos"></tbody></table>
+        </div>
+        <div class="table-box">
+          <h3>Alimento por galpón</h3>
+          <table><thead><tr><th>Galpón</th><th>Sacos</th><th>Kg</th><th>Estado</th></tr></thead><tbody id="tabla-balanceado"></tbody></table>
+        </div>
+        <div class="table-box">
+          <h3>Movimientos de alimento</h3>
+          <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th>Cantidad</th></tr></thead><tbody id="tabla-alimento-mov"></tbody></table>
+        </div>
+        <div id="voucher-alimento" class="box voucher-box hidden"></div>
+      </section>
+
+      <!-- MOLINO -->
+      <section id="tab-molino" class="tab-content">
+        <h2>Molino</h2>
+        <div class="box">
+          <h3>Producción de alimento</h3>
+          <div class="form-grid">
+            <div><label>Fecha</label><input type="date" id="molino-fecha"></div>
+            <div><label>Galpón destino</label><select id="molino-galpon"></select></div>
+            <div><label>Fórmula</label><input type="text" id="molino-formula-actual" readonly></div>
+            <div><label>Tandas</label><input type="number" id="molino-kg" min="1" value="1"></div>
+          </div>
+          <button id="btn-ver-formula" class="btn btn-secondary">Ver insumos</button>
+          <button id="btn-producir-molino" class="btn btn-primary">Producir</button>
+          <div id="formula-preview" style="margin-top:12px"></div>
+        </div>
+        <div class="table-box">
+          <h3>Producciones del molino</h3>
+          <table><thead><tr><th>Fecha</th><th>Destino</th><th>Tandas</th><th>Sacos</th><th>Kg</th><th>Detalle</th></tr></thead><tbody id="tabla-molino"></tbody></table>
+        </div>
+        <div id="voucher-molino" class="box voucher-box hidden"></div>
+      </section>
+
+      <!-- VENTAS -->
+      <section id="tab-ventas" class="tab-content">
+        <h2>Ventas</h2>
+        <div class="cards-grid" id="ventas-stock-cards">
+          <div class="card"><span>Stock disponible</span><strong id="ventas-stock-total">0</strong></div>
+          <div class="card"><span>Primera</span><strong id="ventas-stock-primera">0</strong></div>
+          <div class="card"><span>Segunda</span><strong id="ventas-stock-segunda">0</strong></div>
+        </div>
+        <div class="box">
+          <h3>Registrar venta</h3>
+          <div class="form-grid">
+            <div><label>Cliente</label>
+              <select id="venta-cliente-select"><option value="">-- Seleccionar --</option></select>
+              <input type="text" id="venta-cliente" placeholder="O escribir nombre">
+            </div>
+            <div><label>Fecha</label><input type="date" id="venta-fecha"></div>
+            <div><label>Jabas primera</label><input type="number" id="venta-primera" min="0" step="0.5" value="0"></div>
+            <div><label>Jabas segunda</label><input type="number" id="venta-segunda" min="0" step="0.5" value="0"></div>
+            <div><label>Total jabas</label><input type="text" id="venta-total-jabas" readonly value="0"></div>
+            <div><label>Promedio kg/jaba</label><input type="number" id="venta-promedio-kg-jaba" value="18" step="0.1"></div>
+            <div><label>Peso total kg</label><input type="text" id="venta-peso" readonly value="0"></div>
+            <div><label>Precio kg primera</label><input type="number" id="venta-precio-primera" value="6.00" step="0.01"></div>
+            <div><label>Precio kg segunda</label><input type="number" id="venta-precio-segunda" value="5.00" step="0.01"></div>
+          </div>
+          <div class="total-display" id="venta-total">Total: S/ 0.00</div>
+          <button id="btn-guardar-venta" class="btn btn-primary">Registrar venta</button>
+        </div>
+        <div class="table-box">
+          <h3>Historial</h3>
+          <table><thead><tr><th>Fecha</th><th>Cliente</th><th>1ra</th><th>2da</th><th>Total</th><th>Peso</th><th>Precio 1ra</th><th>Precio 2da</th><th>Total S/</th><th>Acción</th></tr></thead><tbody id="tabla-ventas"></tbody></table>
+        </div>
+      </section>
+
+      <!-- CLIENTES (dinámico) -->
+      <section id="tab-clientes" class="tab-content"></section>
+      <!-- PROVEEDORES (dinámico) -->
+      <section id="tab-proveedores" class="tab-content"></section>
+      <!-- COMPRAS (dinámico) -->
+      <section id="tab-compras" class="tab-content"></section>
+      <!-- EMPLEADOS (dinámico) -->
+      <section id="tab-empleados" class="tab-content"></section>
+
+      <!-- ADMIN -->
+      <section id="tab-admin" class="tab-content">
+        <h2>Administración</h2>
+        <div class="box">
+          <h3>Agregar galpón</h3>
+          <div class="form-grid">
+            <div><label>Nombre</label><input type="text" id="admin-galpon-nombre" placeholder="Ej: Galpón 10"></div>
+            <div><label>Gallinas iniciales</label><input type="number" id="admin-galpon-gallinas" min="0"></div>
+          </div>
+          <button id="btn-admin-agregar-galpon" class="btn btn-primary">Agregar</button>
+        </div>
+        <div class="box">
+          <h3>Editar galpón</h3>
+          <div class="form-grid">
+            <div><label>Galpón</label><select id="admin-galpon-editar-select"></select></div>
+            <div><label>Nuevo nombre</label><input type="text" id="admin-galpon-editar-nombre"></div>
+            <div><label>Gallinas</label><input type="number" id="admin-galpon-editar-gallinas" min="0"></div>
+          </div>
+          <button id="btn-admin-cargar-galpon" class="btn btn-secondary">Cargar</button>
+          <button id="btn-admin-guardar-galpon" class="btn btn-primary">Guardar</button>
+          <div style="margin-top:12px"><label>Eliminar galpón</label><select id="admin-galpon-eliminar"></select></div>
+          <button id="btn-admin-eliminar-galpon" class="btn btn-danger">Eliminar</button>
+        </div>
+        <div class="table-box">
+          <h3>Galpones registrados</h3>
+          <table><thead><tr><th>Nombre</th><th>Gallinas</th><th>Alimento (kg)</th></tr></thead><tbody id="tabla-galpones"></tbody></table>
+        </div>
+        <div class="box">
+          <h3>Nuevo insumo</h3>
+          <div class="form-grid">
+            <div><label>Nombre</label><input type="text" id="nuevo-insumo-nombre" placeholder="Ej: AFRECHO"></div>
+            <div><label>Presentación</label>
+              <select id="nuevo-insumo-presentacion">
+                <option value="toneladas">Toneladas</option>
+                <option value="sacos50">Sacos 50 kg</option>
+                <option value="tanques1000">Tanques 1000 L</option>
+                <option value="sacos25">Sacos 25 kg</option>
+                <option value="kg">Kilogramos</option>
+              </select>
+            </div>
+            <div><label>Stock inicial</label><input type="number" id="nuevo-insumo-stock" min="0" step="0.1" value="0"></div>
+          </div>
+          <button id="btn-agregar-insumo" class="btn btn-primary">Agregar insumo</button>
+        </div>
+        <div class="box">
+          <h3>Eliminar insumo</h3>
+          <div class="form-grid">
+            <div><label>Insumo</label><select id="admin-insumo-eliminar"></select></div>
+          </div>
+          <button id="btn-eliminar-insumo" class="btn btn-danger">Eliminar</button>
+        </div>
+        <div class="box">
+          <h3>Fórmulas del molino</h3>
+          <div class="form-grid">
+            <div><label>Seleccionar</label><select id="edit-formula"></select></div>
+            <div><label>Destino</label><input type="text" id="edit-formula-destino"></div>
+          </div>
+          <button id="btn-guardar-formula-destino" class="btn btn-secondary">Guardar destino</button>
+          <hr>
+          <div class="form-grid">
+            <div><label>Insumo</label><select id="edit-formula-insumo"></select></div>
+            <div><label>Kg/tanda</label><input type="number" id="edit-formula-kg" min="0" step="0.1"></div>
+          </div>
+          <button id="btn-agregar-formula-insumo" class="btn btn-primary">Agregar/Actualizar</button>
+          <button id="btn-quitar-formula-insumo" class="btn btn-danger">Quitar</button>
+          <div id="editor-formula-preview" style="margin-top:12px"></div>
+          <hr>
+          <div class="form-grid">
+            <div><label>Nueva fórmula</label><input type="text" id="nueva-formula-nombre" placeholder="Ej: GALPON 10"></div>
+            <div><label>Destino</label><input type="text" id="nueva-formula-destino" placeholder="Ej: Galpón 10"></div>
+          </div>
+          <button id="btn-crear-formula" class="btn btn-primary">Crear fórmula</button>
+          <button id="btn-eliminar-formula" class="btn btn-danger">Eliminar seleccionada</button>
+        </div>
+      </section>
+
+      <!-- REPORTES -->
+      <section id="tab-reportes" class="tab-content"></section>
+      <!-- ALERTAS -->
+      <section id="tab-alertas" class="tab-content"></section>
+
+    </main>
+
+    <div id="mensaje" class="mensaje hidden"></div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

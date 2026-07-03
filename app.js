@@ -1,1871 +1,1726 @@
-
-const USUARIOS = [
-    { usuario: "admin", clave: "123", rol: "Administrador" },
-    { usuario: "produccion", clave: "123", rol: "Producción" },
-    { usuario: "almacen", clave: "123", rol: "Almacén" },
-    { usuario: "ventas", clave: "123", rol: "Ventas" }
-];
-
-const APP_VERSION = "avicola-ventas-promedio-eliminar-v11";
-
-const SACOS_POR_TANDA = 30;
-const KG_POR_SACO_BALANCEADO = 50;
-const KG_PRODUCIDOS_POR_TANDA = SACOS_POR_TANDA * KG_POR_SACO_BALANCEADO;
-const STOCK_MINIMO_ALIMENTO_SACOS = 5;
-const STOCK_MINIMO_JABAS = 10;
-
-
-let INSUMOS_INFO = {
-    "MAIZ": { cantidadInicial: 100, unidadCompra: "toneladas", kgPorUnidad: 1000, etiqueta: "Granel" },
-    "TORTA DE SOYA": { cantidadInicial: 50, unidadCompra: "toneladas", kgPorUnidad: 1000, etiqueta: "Granel" },
-    "PALMISTE": { cantidadInicial: 15, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
-    "CAL FINA": { cantidadInicial: 25, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
-    "CAL GRUESO": { cantidadInicial: 35, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
-    "ACEITE DE SOYA": { cantidadInicial: 20, unidadCompra: "tanques de 1000 L", kgPorUnidad: 1000, etiqueta: "Litros" },
-    "SAL INDUSTRIAL": { cantidadInicial: 10, unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" },
-    "PHOSBIC": { cantidadInicial: 8, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "PRE POSTURA": { cantidadInicial: 3, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "METIONINA": { cantidadInicial: 2, unidadCompra: "tanques de 1000 L", kgPorUnidad: 1000, etiqueta: "Litros" },
-    "LISINA": { cantidadInicial: 2, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "BIO COLINA": { cantidadInicial: 1, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "BICARBONATO": { cantidadInicial: 5, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "NEOMICINA": { cantidadInicial: 1, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "SECUESTRANTE": { cantidadInicial: 2, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "TREONINA": { cantidadInicial: 1, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "LIPTOSA": { cantidadInicial: 1, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" },
-    "ADIPACK": { cantidadInicial: 1, unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" }
-};
-
-function crearStockInicialInsumos() {
-    const stock = {};
-    Object.keys(INSUMOS_INFO).forEach(nombre => {
-        stock[nombre] = INSUMOS_INFO[nombre].cantidadInicial * INSUMOS_INFO[nombre].kgPorUnidad;
-    });
-    return stock;
-}
-
-// Consumo de insumos para 1 tanda de alimento.
-// 1 tanda produce 30 sacos de 50 kg.
-let FORMULAS_MOLINO = {
-    "GALPON 4": {
-        destino: "Galpón 4",
-        insumos: {
-            "MAIZ": 879, "TORTA DE SOYA": 338, "PALMISTE": 98,
-            "CAL FINA": 48, "CAL GRUESO": 103, "ACEITE DE SOYA": 4.5,
-            "SAL INDUSTRIAL": 4.2, "PHOSBIC": 9.0, "PRE POSTURA": 1.5,
-            "METIONINA": 3.6, "LISINA": 1.8, "BIO COLINA": 0.45,
-            "BICARBONATO": 4.0, "NEOMICINA": 0.4, "SECUESTRANTE": 2.5,
-            "TREONINA": 0.6, "LIPTOSA": 0.75, "ADIPACK": 0.75
-        }
-    },
-    "GALPON 5": {
-        destino: "Galpón 5",
-        insumos: {
-            "MAIZ": 942, "TORTA DE SOYA": 270, "PALMISTE": 91,
-            "CAL FINA": 30, "CAL GRUESO": 135, "ACEITE DE SOYA": 3,
-            "SAL INDUSTRIAL": 5.2, "PHOSBIC": 8.1, "PRE POSTURA": 1.5,
-            "METIONINA": 3.1, "LISINA": 2.1, "BIO COLINA": 0.45,
-            "BICARBONATO": 3.75, "NEOMICINA": 0.4, "SECUESTRANTE": 2.5,
-            "TREONINA": 0.45, "LIPTOSA": 0.75, "ADIPACK": 0.75
-        }
-    },
-    "GALPON 6": {
-        destino: "Galpón 6",
-        insumos: {
-            "MAIZ": 907, "TORTA DE SOYA": 309, "PALMISTE": 94,
-            "CAL GRUESO": 30, "ACEITE DE SOYA": 126, "SAL INDUSTRIAL": 4.5,
-            "PHOSBIC": 7.5, "PRE POSTURA": 1.5, "METIONINA": 3.8,
-            "LISINA": 1.8, "BIO COLINA": 0.45, "BICARBONATO": 4.5,
-            "NEOMICINA": 0.4, "SECUESTRANTE": 2.5, "TREONINA": 0.5,
-            "LIPTOSA": 0.75, "ADIPACK": 0.75
-        }
-    },
-    "GALPON 8": {
-        destino: "Galpón 8",
-        insumos: {
-            "MAIZ": 942, "TORTA DE SOYA": 270, "PALMISTE": 91,
-            "CAL FINA": 30, "CAL GRUESO": 135, "ACEITE DE SOYA": 3,
-            "SAL INDUSTRIAL": 5.2, "PHOSBIC": 8.1, "PRE POSTURA": 1.5,
-            "METIONINA": 3.1, "LISINA": 2.1, "BIO COLINA": 0.45,
-            "BICARBONATO": 3.75, "NEOMICINA": 0.4, "SECUESTRANTE": 2.5,
-            "TREONINA": 0.45, "LIPTOSA": 0.75, "ADIPACK": 0.75
-        }
-    },
-    "GALPON AUTOMATICO": {
-        destino: "Galpón Automático",
-        insumos: {
-            "MAIZ": 907, "TORTA DE SOYA": 309, "PALMISTE": 94,
-            "CAL GRUESO": 30, "ACEITE DE SOYA": 126, "SAL INDUSTRIAL": 4.5,
-            "PHOSBIC": 7.5, "PRE POSTURA": 1.5, "METIONINA": 3.8,
-            "LISINA": 1.8, "BIO COLINA": 0.45, "BICARBONATO": 4.5,
-            "NEOMICINA": 0.4, "SECUESTRANTE": 2.5, "TREONINA": 0.5,
-            "LIPTOSA": 0.75, "ADIPACK": 0.75
-        }
+// API Helper
+async function api(method, url, body) {
+  const opts = { method, headers: {} };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  try {
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = (data && data.error) || `Error ${res.status}`;
+      mostrarMensaje(msg, 'error');
+      throw new Error(msg);
     }
-};
-
-function clonar(objeto) {
-    return JSON.parse(JSON.stringify(objeto));
+    return data;
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.startsWith('Error'))
+      mostrarMensaje('Error de conexión con el servidor', 'error');
+    throw err;
+  }
 }
 
-const GALLINAS_INICIALES = {
-    "Galpón 4": 12765,
-    "Galpón 5": 11800,
-    "Galpón 6": 12300,
-    "Galpón 8": 10900,
-    "Galpón Automático": 8500
-};
+// State
+let session = null;
+let galponesCache = [];
 
-// Datos iniciales sin registros falsos
-let datos = {
-    usuarioActual: null,
-    stockJabas: 0,
-    stockHuevos: { primera: 0, segunda: 0 },
-    lotesHuevos: [],
-    produccion: [],
-    movimientosHuevos: [],
-    ventas: [],
-    movimientosAlimento: [],
-    molino: [],
-    diasCerrados: [],
+// Utility
+function $(id) { return document.getElementById(id); }
+function numero(v) { return Number(v || 0); }
+function hoy() { return new Date().toISOString().split('T')[0]; }
+function escapeHTML(v) { return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function formatoJabas(v) { const n = numero(v); return Number.isInteger(n) ? String(n) : n.toFixed(1); }
+function calcularPaquetesDesdeJabas(j) { return Math.round(numero(j) * 2); }
+function esCantidadJabasValida(v) { const n = numero(v); return n >= 0 && Math.abs(n * 2 - Math.round(n * 2)) < 1e-6; }
 
-    // Gallinas iniciales por galpón
-    gallinas: clonar(GALLINAS_INICIALES),
-
-    // Stock de insumos en kg. Se inicia con valores predeterminados.
-    insumos: crearStockInicialInsumos(),
-
-    // Alimento balanceado producido por el molino. Se guarda en kg, pero se muestra también en sacos de 50 kg.
-    alimentoPorGalpon: {},
-
-    // Estos datos quedan editables desde la interfaz.
-    insumosInfo: clonar(INSUMOS_INFO),
-    formulasMolino: clonar(FORMULAS_MOLINO),
-
-    version: APP_VERSION
-};
-
-// -------------------- LOCAL STORAGE --------------------
-function guardarDatos() {
-    localStorage.setItem("sistemaAvicolaSimple", JSON.stringify(datos));
+function mostrarMensaje(texto, tipo) {
+  const el = $('mensaje');
+  if (!el) return;
+  el.textContent = texto;
+  el.className = 'mensaje ' + (tipo === 'error' ? 'error' : 'ok');
+  setTimeout(() => { el.className = 'mensaje hidden'; }, 3500);
 }
 
-function cargarDatos() {
-    const guardado = localStorage.getItem("sistemaAvicolaSimple");
-    if (guardado) {
-        const recuperado = JSON.parse(guardado);
-        // Si cambia la versión, se usa la estructura nueva para evitar campos antiguos.
-        if (recuperado.version === APP_VERSION) {
-            datos = recuperado;
-        }
+// Galpon helpers
+async function cargarGalpones() {
+  try { galponesCache = await api('GET', '/api/galpones') || []; } catch { galponesCache = []; }
+  return galponesCache;
+}
+
+function opcionesGalponesHTML(galpones, incluirTodos) {
+  const opts = (galpones || galponesCache).map(g =>
+    `<option value="${g.id}">${escapeHTML(g.nombre)}</option>`
+  ).join('');
+  return incluirTodos ? '<option value="">Todos</option>' + opts : opts;
+}
+
+function nombreGalponPorId(id) {
+  const g = (galponesCache || []).find(x => x.id === id);
+  return g ? g.nombre : '';
+}
+
+// ==================== LOGIN ====================
+async function iniciarSesion() {
+  const usuario = ($('login-user')?.value || '').trim();
+  const clave = ($('login-pass')?.value || '').trim();
+  if (!usuario || !clave) { mostrarMensaje('Ingrese usuario y contraseña', 'error'); return; }
+  try {
+    const res = await api('POST', '/api/auth/login', { usuario, clave });
+    if (res && res.usuario) {
+      session = res.usuario;
+      await cargarGalpones();
+      mostrarAplicacion();
+    } else {
+      mostrarMensaje('Credenciales inválidas', 'error');
     }
-    normalizarDatos();
-}
-
-function normalizarDatos() {
-    // Si el navegador tenía datos de una versión anterior, no borramos producción ni ventas.
-    // Solo agregamos los nuevos campos editables de insumos y fórmulas.
-    if (!datos.insumosInfo) datos.insumosInfo = clonar(INSUMOS_INFO);
-    if (!datos.formulasMolino) datos.formulasMolino = clonar(FORMULAS_MOLINO);
-    if (!datos.gallinas) datos.gallinas = clonar(GALLINAS_INICIALES);
-
-    // Agrega las fórmulas base si faltan, pero respeta las que el usuario edite o cree.
-    Object.keys(FORMULAS_MOLINO).forEach(nombreFormula => {
-        if (!datos.formulasMolino[nombreFormula]) {
-            datos.formulasMolino[nombreFormula] = clonar(FORMULAS_MOLINO[nombreFormula]);
-        }
-    });
-
-    // Asegura que cada galpón tenga un número válido de gallinas.
-    Object.keys(datos.gallinas).forEach(galpon => {
-        datos.gallinas[galpon] = Math.max(0, Number(datos.gallinas[galpon]) || 0);
-    });
-
-    if (!datos.stockHuevos) {
-        datos.stockHuevos = { primera: numero(datos.stockJabas), segunda: 0 };
-    }
-    datos.stockHuevos.primera = numero(datos.stockHuevos.primera);
-    datos.stockHuevos.segunda = numero(datos.stockHuevos.segunda);
-    datos.stockHuevos = {
-        primera: datos.stockHuevos.primera,
-        segunda: datos.stockHuevos.segunda
-    };
-    if (datos.produccion) {
-        datos.produccion.forEach(p => {
-            p.jabas = numero(p.primera) + numero(p.segunda);
-            if (!p.id) p.id = generarId(datos.produccion);
-        });
-    }
-    if (datos.ventas) {
-        datos.ventas.forEach(v => {
-            if (!v.id) v.id = generarId(datos.ventas);
-            if (v.primera === undefined && v.segunda === undefined) {
-                const clase = normalizarClaseHuevos(v.tipoHuevos || 'Primera');
-                v.primera = clase === 'primera' ? numero(v.jabas) : 0;
-                v.segunda = clase === 'segunda' ? numero(v.jabas) : 0;
-            }
-            v.totalJabas = numero(v.primera) + numero(v.segunda);
-            if (v.promedioKgJaba === undefined) {
-                v.promedioKgJaba = v.totalJabas > 0 ? numero(v.peso) / v.totalJabas : 0;
-            }
-            if (v.montoTotal === undefined) v.montoTotal = numero(v.total);
-        });
-    }
-    if (!datos.lotesHuevos) datos.lotesHuevos = [];
-    datos.lotesHuevos.forEach(lote => {
-        lote.cantidadInicial = numero(lote.cantidadInicial);
-        lote.cantidadDisponible = numero(lote.cantidadDisponible);
-    });
-    if (datos.lotesHuevos.length === 0 && numero(datos.stockHuevos.primera) > 0) {
-        datos.lotesHuevos.push({
-            id: 1,
-            fecha: hoy(),
-            galpon: "Stock inicial",
-            clase: "Primera",
-            cantidadInicial: numero(datos.stockHuevos.primera),
-            cantidadDisponible: numero(datos.stockHuevos.primera)
-        });
-    }
-    sincronizarStockJabas();
-
-
-    INSUMOS_INFO = datos.insumosInfo;
-    FORMULAS_MOLINO = datos.formulasMolino;
-
-    if (datos.version !== APP_VERSION) {
-        datos.version = APP_VERSION;
-    }
-
-    if (!datos.insumos) datos.insumos = crearStockInicialInsumos();
-    Object.keys(INSUMOS_INFO).forEach(nombre => {
-        if (datos.insumos[nombre] === undefined) {
-            datos.insumos[nombre] = INSUMOS_INFO[nombre].cantidadInicial * INSUMOS_INFO[nombre].kgPorUnidad;
-        }
-    });
-
-    // Limpia insumos que ya fueron eliminados desde la administración.
-    Object.keys(datos.insumos).forEach(nombre => {
-        if (!INSUMOS_INFO[nombre]) delete datos.insumos[nombre];
-    });
-
-    if (!datos.alimentoPorGalpon) datos.alimentoPorGalpon = {};
-
-    // Cada galpón registrado debe tener su propio stock de alimento balanceado.
-    Object.keys(datos.gallinas).forEach(galpon => {
-        if (datos.alimentoPorGalpon[galpon] === undefined) datos.alimentoPorGalpon[galpon] = 0;
-    });
-
-    Object.keys(FORMULAS_MOLINO).forEach(nombreFormula => {
-        const destino = FORMULAS_MOLINO[nombreFormula].destino;
-        if (destino && datos.gallinas[destino] !== undefined && datos.alimentoPorGalpon[destino] === undefined) {
-            datos.alimentoPorGalpon[destino] = 0;
-        }
-    });
-
-    // Mantiene fórmulas y alimento solo para galpones activos.
-    // Si el usuario agrega un galpón, puede crearle una fórmula desde Administrador.
-    Object.keys(FORMULAS_MOLINO).forEach(nombreFormula => {
-        const destino = FORMULAS_MOLINO[nombreFormula].destino;
-        if (destino && datos.gallinas[destino] === undefined) {
-            delete FORMULAS_MOLINO[nombreFormula];
-        }
-    });
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    Object.keys(datos.alimentoPorGalpon).forEach(galpon => {
-        if (datos.gallinas[galpon] === undefined) delete datos.alimentoPorGalpon[galpon];
-    });
-
-    guardarDatos();
-}
-// -------------------- UTILIDADES --------------------
-function hoy() {
-    return new Date().toISOString().split("T")[0];
-}
-
-function generarId(lista) {
-    return lista.length + 1;
-}
-
-function estaCerrado(fecha) {
-    return datos.diasCerrados.includes(fecha);
-}
-
-function mostrarMensaje(texto, tipo = "ok") {
-    const div = document.getElementById("mensaje");
-    div.textContent = texto;
-    div.className = "mensaje " + tipo;
-
-    setTimeout(() => {
-        div.className = "mensaje hidden";
-    }, 3500);
-}
-
-function numero(valor) {
-    return Number(valor || 0);
-}
-
-function sincronizarStockJabas() {
-    if (!datos.stockHuevos) datos.stockHuevos = { primera: 0, segunda: 0 };
-    datos.stockJabas = numero(datos.stockHuevos.primera) + numero(datos.stockHuevos.segunda);
-}
-
-function stockMinimoInsumoKg(insumo) {
-    const info = INSUMOS_INFO[insumo];
-    return info ? info.kgPorUnidad : 50;
-}
-
-function normalizarClaseHuevos(clase) {
-    if (!clase) return "primera";
-    const valor = clase.toString().toLowerCase();
-    if (valor.includes("segunda")) return "segunda";
-    return "primera";
-}
-
-function textoClaseHuevos(clase) {
-    const key = normalizarClaseHuevos(clase);
-    if (key === "segunda") return "Segunda";
-    return "Primera";
-}
-
-function agregarLoteHuevos(fecha, galpon, clase, cantidad, produccionId = null) {
-    const key = normalizarClaseHuevos(clase);
-    const valor = numero(cantidad);
-    if (!fecha || valor <= 0) return;
-
-    datos.stockHuevos[key] += valor;
-    datos.lotesHuevos.push({
-        id: generarId(datos.lotesHuevos),
-        produccionId,
-        fecha,
-        galpon,
-        clase: textoClaseHuevos(key),
-        cantidadInicial: valor,
-        cantidadDisponible: valor
-    });
-}
-
-function registrarMovimientoHuevos(fecha, tipo, detalle, primera, segunda, ventaId = null, produccionId = null) {
-    const cantPrimera = numero(primera);
-    const cantSegunda = numero(segunda);
-
-    datos.movimientosHuevos.push({
-        id: generarId(datos.movimientosHuevos),
-        fecha,
-        tipo,
-        detalle,
-        primera: cantPrimera,
-        segunda: cantSegunda,
-        total: cantPrimera + cantSegunda,
-        ventaId,
-        produccionId
-    });
-}
-
-function descontarHuevosFIFO(clase, cantidad) {
-    const key = normalizarClaseHuevos(clase);
-    const valor = numero(cantidad);
-
-    if (valor <= 0) {
-        return { ok: false, mensaje: "Ingrese una cantidad válida de jabas.", detalle: [] };
-    }
-
-    if (valor > numero(datos.stockHuevos[key])) {
-        return { ok: false, mensaje: "No hay stock suficiente de jabas de " + textoClaseHuevos(key) + ".", detalle: [] };
-    }
-
-    const lotesDisponibles = datos.lotesHuevos
-        .filter(l => normalizarClaseHuevos(l.clase) === key && numero(l.cantidadDisponible) > 0)
-        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha) || a.id - b.id);
-
-    const totalLotes = lotesDisponibles.reduce((suma, lote) => suma + numero(lote.cantidadDisponible), 0);
-    if (valor > totalLotes) {
-        return { ok: false, mensaje: "No hay stock suficiente para completar la venta.", detalle: [] };
-    }
-
-    let pendiente = valor;
-    const detalle = [];
-
-    for (const lote of lotesDisponibles) {
-        if (pendiente <= 0) break;
-        const usado = Math.min(pendiente, numero(lote.cantidadDisponible));
-        lote.cantidadDisponible -= usado;
-        pendiente -= usado;
-        detalle.push({ loteId: lote.id, clase: key, cantidad: usado });
-    }
-
-    datos.stockHuevos[key] -= valor;
-    sincronizarStockJabas();
-
-    return { ok: true, detalle };
-}
-
-function galponTieneFormula(galpon) {
-    const numeroGalpon = (galpon.match(/\d+/) || [""])[0];
-    return Object.values(FORMULAS_MOLINO).some(f => {
-        const destino = (f.destino || "").toLowerCase();
-        if (destino === galpon.toLowerCase()) return true;
-        return numeroGalpon && destino.includes(numeroGalpon);
-    });
-}
-
-
-function convertirIngresoAkg(insumo, cantidad) {
-    const info = INSUMOS_INFO[insumo];
-    return cantidad * (info ? info.kgPorUnidad : 1);
-}
-
-function formatoStockInsumo(insumo, kg) {
-    const info = INSUMOS_INFO[insumo];
-    if (!info) return kg.toFixed(2) + " kg";
-
-    if (info.unidadCompra.includes("toneladas")) {
-        return (kg / 1000).toFixed(2) + " toneladas";
-    }
-
-    if (info.unidadCompra.includes("1000 L")) {
-        return kg.toFixed(2) + " L";
-    }
-
-    return (kg / info.kgPorUnidad).toFixed(2) + " " + info.unidadCompra;
-}
-
-function sacosBalanceado(kg) {
-    return kg / KG_POR_SACO_BALANCEADO;
-}
-
-function obtenerGalpones() {
-    return Object.keys(datos.gallinas || {});
-}
-
-function opcionesGalponesHTML(incluirTodos = false) {
-    const opciones = obtenerGalpones().map(g => `<option value="${g}">${g}</option>`).join("");
-    return incluirTodos ? `<option value="">Todos</option>` + opciones : opciones;
-}
-
-// -------------------- LOGIN Y ROLES --------------------
-function iniciarSesion() {
-    const usuario = document.getElementById("login-user").value.trim();
-    const clave = document.getElementById("login-pass").value.trim();
-
-    const encontrado = USUARIOS.find(u => u.usuario === usuario && u.clave === clave);
-
-    if (!encontrado) {
-        alert("Usuario o contraseña incorrectos");
-        return;
-    }
-
-    datos.usuarioActual = encontrado;
-    guardarDatos();
-    mostrarAplicacion();
+  } catch { /* message shown by api helper */ }
 }
 
 function cerrarSesion() {
-    datos.usuarioActual = null;
-    guardarDatos();
-    location.reload();
+  session = null;
+  galponesCache = [];
+  const login = $('login-screen');
+  const app = $('app');
+  if (login) login.classList.remove('hidden');
+  if (app) app.classList.add('hidden');
 }
 
 function mostrarAplicacion() {
-    document.getElementById("login-screen").classList.add("hidden");
-    document.getElementById("app").classList.remove("hidden");
-
-    document.getElementById("user-role").textContent = datos.usuarioActual.rol;
-
-    aplicarPermisos();
-    actualizarTodo();
+  const login = $('login-screen');
+  const app = $('app');
+  if (login) login.classList.add('hidden');
+  if (app) app.classList.remove('hidden');
+  if (session && $('user-role')) $('user-role').textContent = session.rol || '';
+  aplicarPermisos();
+  poblarSelectores();
+  actualizarTodo();
 }
 
 function aplicarPermisos() {
-    const rol = datos.usuarioActual.rol;
-
-    // Producción solo para Producción o Administrador
-    if (rol !== "Administrador" && rol !== "Producción") {
-        bloquearBoton("btn-guardar-produccion");
+  const rol = session ? session.rol : '';
+  const botones = [
+    { id: 'btn-guardar-produccion', roles: ['Administrador', 'Producción'] },
+    { id: 'btn-ingresar-insumo', roles: ['Administrador', 'Almacén'] },
+    { id: 'btn-agregar-insumo', roles: ['Administrador'] },
+    { id: 'btn-eliminar-insumo', roles: ['Administrador'] },
+    { id: 'btn-consumir-alimento', roles: ['Administrador', 'Almacén'] },
+    { id: 'btn-guardar-clases-segunda', roles: ['Administrador', 'Almacén'] },
+    { id: 'btn-producir-molino', roles: ['Administrador', 'Almacén'] },
+    { id: 'btn-guardar-formula-destino', roles: ['Administrador'] },
+    { id: 'btn-agregar-formula-insumo', roles: ['Administrador'] },
+    { id: 'btn-quitar-formula-insumo', roles: ['Administrador'] },
+    { id: 'btn-crear-formula', roles: ['Administrador'] },
+    { id: 'btn-eliminar-formula', roles: ['Administrador'] },
+    { id: 'btn-guardar-venta', roles: ['Administrador', 'Ventas'] },
+    { id: 'btn-admin-agregar-galpon', roles: ['Administrador'] },
+    { id: 'btn-admin-cargar-galpon', roles: ['Administrador'] },
+    { id: 'btn-admin-guardar-galpon', roles: ['Administrador'] },
+    { id: 'btn-admin-eliminar-galpon', roles: ['Administrador'] },
+    { id: 'btn-guardar-cliente', roles: ['Administrador'] },
+    { id: 'btn-guardar-proveedor', roles: ['Administrador'] },
+    { id: 'btn-guardar-empleado', roles: ['Administrador'] },
+    { id: 'btn-guardar-compra', roles: ['Administrador', 'Almacén'] },
+  ];
+  botones.forEach(b => {
+    const el = $(b.id);
+    if (el) {
+      const allowed = b.roles.includes(rol);
+      el.disabled = !allowed;
+      el.title = allowed ? '' : 'No tiene permiso';
     }
-
-    // Almacén de alimento y molino solo para Almacén o Administrador
-    if (rol !== "Administrador" && rol !== "Almacén") {
-        bloquearBoton("btn-ingresar-insumo");
-        bloquearBoton("btn-agregar-insumo");
-        bloquearBoton("btn-eliminar-insumo");
-        bloquearBoton("btn-consumir-alimento");
-        bloquearBoton("btn-producir-molino");
-        bloquearBoton("btn-guardar-formula-destino");
-        bloquearBoton("btn-agregar-formula-insumo");
-        bloquearBoton("btn-quitar-formula-insumo");
-        bloquearBoton("btn-crear-formula");
-        bloquearBoton("btn-eliminar-formula");
-    }
-
-    // Ventas solo para Ventas o Administrador
-    if (rol !== "Administrador" && rol !== "Ventas") {
-        bloquearBoton("btn-guardar-venta");
-    }
-
-    // Administrador solo para datos maestros
-    const btnAdmin = document.querySelector('.nav-btn[data-tab="admin"]');
-    if (btnAdmin && rol !== "Administrador") {
-        btnAdmin.style.display = "none";
-        [
-            "btn-admin-agregar-galpon", "btn-admin-cargar-galpon", "btn-admin-guardar-galpon",
-            "btn-admin-eliminar-galpon", "btn-agregar-insumo", "btn-eliminar-insumo",
-            "btn-guardar-formula-destino", "btn-agregar-formula-insumo", "btn-quitar-formula-insumo",
-            "btn-crear-formula", "btn-eliminar-formula"
-        ].forEach(bloquearBoton);
-    }
+  });
+  const adminBtn = document.querySelector('.nav-btn[data-tab="admin"]');
+  if (adminBtn) adminBtn.style.display = rol === 'Administrador' ? '' : 'none';
 }
 
-
-function bloquearBoton(id) {
-    const btn = document.getElementById(id);
-    if (btn) {
-        btn.disabled = true;
-        btn.title = "No tiene permiso para esta acción";
-    }
-}
-
-// -------------------- NAVEGACIÓN --------------------
+// ==================== NAVEGACIÓN ====================
 function cambiarTab(tab) {
-    document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach(sec => sec.classList.remove("active"));
-
-    document.querySelector(`.nav-btn[data-tab="${tab}"]`).classList.add("active");
-    document.getElementById("tab-" + tab).classList.add("active");
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+  const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
+  const sec = $(`tab-${tab}`);
+  if (btn) btn.classList.add('active');
+  if (sec) sec.classList.add('active');
 }
 
-// -------------------- PRODUCCIÓN --------------------
-function guardarProduccion() {
-    const fecha = document.getElementById("prod-fecha").value;
-    const galpon = document.getElementById("prod-galpon").value;
-    const primera = numero(document.getElementById("prod-jabas-primera").value);
-    const segunda = numero(document.getElementById("prod-jabas-segunda").value);
-    const muertas = numero(document.getElementById("prod-muertas").value);
-    const jabas = primera + segunda;
+// ==================== SELECTORES ====================
+async function poblarSelectores() {
+  await cargarGalpones();
+  const galpones = galponesCache;
 
-    if (!fecha) {
-        mostrarMensaje("No se pueden almacenar huevos sin registrar la fecha de ingreso.", "error");
-        return;
+  const selectsGalpon = ['prod-galpon', 'filtro-prod-galpon', 'molino-galpon', 'consumo-galpon',
+    'admin-galpon-editar-select', 'admin-galpon-eliminar', 'rendimiento-galpon'];
+  selectsGalpon.forEach(id => {
+    const el = $(id);
+    if (el) {
+      const incluirTodos = id === 'filtro-prod-galpon';
+      el.innerHTML = opcionesGalponesHTML(galpones, incluirTodos);
     }
+  });
 
-    if (estaCerrado(fecha)) {
-        mostrarMensaje("No se puede registrar. El día ya fue cerrado.", "error");
-        return;
+  // Clientes
+  try {
+    const clientes = await api('GET', '/api/clientes');
+    const selCliente = $('venta-cliente-select');
+    if (selCliente) {
+      selCliente.innerHTML = '<option value="">-- Seleccione --</option>' +
+        (clientes || []).map(c => `<option value="${c.id}" data-nombre="${escapeHTML(c.nombre)}">${escapeHTML(c.nombre)}</option>`).join('');
     }
+  } catch {}
 
-    if (!datos.gallinas.hasOwnProperty(galpon)) {
-        mostrarMensaje("Seleccione un galpón válido. Puede crearlo en Administrador.", "error");
-        return;
+  // Proveedores
+  try {
+    const proveedores = await api('GET', '/api/proveedores');
+    const selProv = $('compra-proveedor');
+    if (selProv) {
+      selProv.innerHTML = '<option value="">-- Seleccione --</option>' +
+        (proveedores || []).map(p => `<option value="${p.id}" data-nombre="${escapeHTML(p.nombre)}">${escapeHTML(p.nombre)}</option>`).join('');
     }
+  } catch {}
 
-    if (primera < 0 || segunda < 0 || muertas < 0) {
-        mostrarMensaje("Las cantidades no pueden ser negativas.", "error");
-        return;
-    }
-
-    if (jabas <= 0) {
-        mostrarMensaje("Ingrese jabas de primera o segunda.", "error");
-        return;
-    }
-
-    const yaRegistrado = datos.produccion.some(p => p.fecha === fecha && p.galpon === galpon);
-    if (yaRegistrado) {
-        mostrarMensaje("Ese galpón ya tiene producción registrada en esa fecha.", "error");
-        return;
-    }
-
-    datos.gallinas[galpon] = Math.max(0, datos.gallinas[galpon] - muertas);
-
-    const idProduccion = Date.now();
-
-    datos.produccion.push({
-        id: idProduccion,
-        fecha,
-        galpon,
-        primera,
-        segunda,
-        jabas,
-        muertas,
-        gallinasRestantes: datos.gallinas[galpon]
+  // Insumos
+  try {
+    const insumos = await api('GET', '/api/insumos');
+    const selectsInsumo = ['insumo-nombre', 'edit-formula-insumo', 'admin-insumo-eliminar', 'compra-insumo'];
+    selectsInsumo.forEach(id => {
+      const el = $(id);
+      if (el) {
+        el.innerHTML = (insumos || []).map(i =>
+          `<option value="${i.id}" data-nombre="${escapeHTML(i.nombre)}" data-etiqueta="${escapeHTML(i.etiqueta || '')}">${escapeHTML(i.nombre)} (${escapeHTML(i.etiqueta || i.unidad_compra || '')})</option>`
+        ).join('');
+      }
     });
+  } catch {}
 
-    // Las jabas se clasifican en primera y segunda. En el almacén aparecen juntas en una sola fila.
-    agregarLoteHuevos(fecha, galpon, "Primera", primera, idProduccion);
-    agregarLoteHuevos(fecha, galpon, "Segunda", segunda, idProduccion);
-    registrarMovimientoHuevos(
-        fecha,
-        "Entrada",
-        "Producción - " + galpon,
-        primera,
-        segunda,
-        null,
-        idProduccion
-    );
-    sincronizarStockJabas();
-
-    guardarDatos();
-    limpiarProduccion();
-    actualizarTodo();
-    mostrarMensaje("Producción registrada. Las jabas ingresaron automáticamente al almacén.");
+  // Fórmulas
+  try {
+    const formulas = await api('GET', '/api/molino/formulas');
+    const selFormula = $('edit-formula');
+    if (selFormula) {
+      selFormula.innerHTML = (formulas || []).map(f =>
+        `<option value="${f.id}" data-nombre="${escapeHTML(f.nombre)}">${escapeHTML(f.nombre)}</option>`
+      ).join('');
+    }
+  } catch {}
 }
-function filtrarProduccion() {
+
+// ==================== DASHBOARD ====================
+async function actualizarDashboard() {
+  try {
+    const d = await api('GET', '/api/reportes/dashboard');
+    if (!d) return;
+    if ($('dash-produccion-hoy')) $('dash-produccion-hoy').textContent = (d.produccion_hoy || 0) + ' jabas';
+    if ($('dash-stock-jabas')) $('dash-stock-jabas').textContent = (d.stock_huevos || 0) + ' jabas';
+    if ($('dash-ventas-hoy')) $('dash-ventas-hoy').textContent = 'S/ ' + (d.ventas_hoy || 0).toFixed(2);
+    if ($('dash-stock-alimento')) $('dash-stock-alimento').textContent = (d.stock_alimento_sacos || 0) + ' sacos';
+  } catch {}
+
+  // Alertas
+  try {
+    const alertas = await api('GET', '/api/alertas/generar');
+    const cont = $('dashboard-alertas');
+    if (cont) {
+      if (!alertas || alertas.length === 0) {
+        cont.innerHTML = '<div class="alert ok">Sin alertas por el momento.</div>';
+      } else {
+        cont.innerHTML = alertas.map(a =>
+          `<div class="alert danger">${escapeHTML(a.mensaje || a.titulo || '')}</div>`
+        ).join('');
+      }
+    }
+  } catch {}
+}
+
+// ==================== PRODUCCIÓN ====================
+async function guardarProduccion() {
+  const fecha = $('prod-fecha')?.value;
+  const galponId = Number($('prod-galpon')?.value);
+  const primera = numero($('prod-jabas-primera')?.value);
+  const segunda = numero($('prod-jabas-segunda')?.value);
+  const muertas = numero($('prod-muertas')?.value);
+
+  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
+  if (!galponId) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
+  if (primera < 0 || segunda < 0 || muertas < 0) { mostrarMensaje('Las cantidades no pueden ser negativas', 'error'); return; }
+  if (!esCantidadJabasValida(primera) || !esCantidadJabasValida(segunda)) { mostrarMensaje('Solo se aceptan jabas enteras o medias jabas', 'error'); return; }
+  if (primera + segunda <= 0) { mostrarMensaje('Ingrese jabas de primera o segunda', 'error'); return; }
+
+  try {
+    await api('POST', '/api/produccion', { fecha, galpon_id: galponId, primera, segunda, muertas });
+    mostrarMensaje('Producción registrada correctamente');
+    $('prod-jabas-primera').value = '0';
+    $('prod-jabas-segunda').value = '0';
+    $('prod-muertas').value = '0';
+    actualizarPaquetesProduccion();
     actualizarTablaProduccion();
+    actualizarDashboard();
+  } catch {}
 }
 
+async function eliminarProduccion(id) {
+  if (!confirm('¿Eliminar esta producción?')) return;
+  try {
+    await api('DELETE', '/api/produccion/' + id);
+    mostrarMensaje('Producción eliminada');
+    actualizarTablaProduccion();
+    actualizarDashboard();
+  } catch {}
+}
+
+async function actualizarTablaProduccion() {
+  const fecha = $('filtro-prod-fecha')?.value;
+  const galponId = $('filtro-prod-galpon')?.value;
+  const params = new URLSearchParams();
+  if (fecha) params.set('fecha', fecha);
+  if (galponId) params.set('galpon_id', galponId);
+  try {
+    const lista = await api('GET', '/api/produccion?' + params.toString()) || [];
+    const tbody = $('tabla-produccion');
+    if (!tbody) return;
+    if (lista.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9">Sin registros</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(p => {
+      const jabas = numero(p.primera) + numero(p.segunda);
+      const paq = calcularPaquetesDesdeJabas(jabas);
+      return `<tr>
+        <td>${p.fecha}</td>
+        <td>${escapeHTML(p.galpon_nombre || nombreGalponPorId(p.galpon_id))}</td>
+        <td>${formatoJabas(p.primera)}</td>
+        <td>${formatoJabas(p.segunda)}</td>
+        <td>${formatoJabas(jabas)}</td>
+        <td>${paq}</td>
+        <td>${numero(p.muertas)}</td>
+        <td>${p.gallinas_restantes ?? '-'}</td>
+        <td><button class="btn btn-danger" onclick="eliminarProduccion(${p.id})">Eliminar</button></td>
+      </tr>`;
+    }).join('');
+  } catch {}
+}
+
+function filtrarProduccion() { actualizarTablaProduccion(); }
 function limpiarFiltroProduccion() {
-    document.getElementById("filtro-prod-fecha").value = "";
-    document.getElementById("filtro-prod-galpon").value = "";
-    actualizarTablaProduccion();
+  if ($('filtro-prod-fecha')) $('filtro-prod-fecha').value = '';
+  if ($('filtro-prod-galpon')) $('filtro-prod-galpon').value = '';
+  actualizarTablaProduccion();
 }
 
-function limpiarProduccion() {
-    document.getElementById("prod-jabas-primera").value = "";
-    document.getElementById("prod-jabas-segunda").value = "";
-    document.getElementById("prod-muertas").value = "0";
+function actualizarPaquetesProduccion() {
+  const p = numero($('prod-jabas-primera')?.value) + numero($('prod-jabas-segunda')?.value);
+  const el = $('prod-total-paquetes');
+  if (el) el.value = calcularPaquetesDesdeJabas(p);
 }
 
-// -------------------- ALMACÉN DE HUEVOS --------------------
-// Este módulo ya no tiene registro manual.
-// Solo muestra el stock actual y el historial generado automáticamente por Producción y Ventas.
-
-// -------------------- ALMACÉN DE ALIMENTO --------------------
-function ingresarInsumo() {
-    const insumo = document.getElementById("insumo-nombre").value;
-    const cantidad = numero(document.getElementById("insumo-kg").value);
-    const fecha = hoy();
-
-    if (estaCerrado(fecha)) {
-        mostrarMensaje("No se puede registrar. El día ya fue cerrado.", "error");
-        return;
+// ==================== ALMACÉN HUEVOS ====================
+async function actualizarAlmacenHuevos() {
+  try {
+    const stock = await api('GET', '/api/almacen/stock');
+    if (stock) {
+      const total = numero(stock.total);
+      if ($('almacen-stock-jabas')) $('almacen-stock-jabas').textContent = formatoJabas(total) + ' jabas';
+      if ($('almacen-stock-primera')) $('almacen-stock-primera').textContent = formatoJabas(stock.primera || 0) + ' jabas';
+      if ($('almacen-stock-segunda')) $('almacen-stock-segunda').textContent = formatoJabas(stock.segunda || 0) + ' jabas';
+      // También actualiza los del módulo de ventas
+      if ($('ventas-stock-total')) $('ventas-stock-total').textContent = formatoJabas(total) + ' jabas';
+      if ($('ventas-stock-primera')) $('ventas-stock-primera').textContent = formatoJabas(stock.primera || 0) + ' jabas';
+      if ($('ventas-stock-segunda')) $('ventas-stock-segunda').textContent = formatoJabas(stock.segunda || 0) + ' jabas';
     }
-
-    if (cantidad <= 0) {
-        mostrarMensaje("Ingrese una cantidad válida.", "error");
-        return;
-    }
-
-    const kgAgregados = convertirIngresoAkg(insumo, cantidad);
-    datos.insumos[insumo] = numero(datos.insumos[insumo]) + kgAgregados;
-
-    const info = INSUMOS_INFO[insumo];
-    datos.movimientosAlimento.push({
-        fecha,
-        tipo: "Ingreso de insumo",
-        detalle: insumo,
-        cantidad: cantidad + " " + info.unidadCompra + " = " + kgAgregados.toFixed(2) + " kg"
-    });
-
-    guardarDatos();
-    document.getElementById("insumo-kg").value = "";
-    actualizarTodo();
-    mostrarMensaje("Ingreso de insumo registrado.");
+  } catch {}
 }
 
-
-function obtenerInfoPorPresentacion(tipo) {
-    if (tipo === "toneladas") return { unidadCompra: "toneladas", kgPorUnidad: 1000, etiqueta: "Granel" };
-    if (tipo === "sacos50") return { unidadCompra: "sacos de 50 kg", kgPorUnidad: 50, etiqueta: "Saco 50 kg" };
-    if (tipo === "tanques1000") return { unidadCompra: "tanques de 1000 L", kgPorUnidad: 1000, etiqueta: "Litros" };
-    if (tipo === "sacos25") return { unidadCompra: "sacos de 25 kg", kgPorUnidad: 25, etiqueta: "Saco 25 kg" };
-    return { unidadCompra: "kg", kgPorUnidad: 1, etiqueta: "Kg" };
+async function actualizarMovimientosHuevos() {
+  try {
+    const movs = await api('GET', '/api/almacen/movimientos') || [];
+    const tbody = $('tabla-almacen-huevos');
+    if (!tbody) return;
+    tbody.innerHTML = movs.map(m => `<tr>
+      <td>${m.fecha}</td>
+      <td>${escapeHTML(m.tipo)}</td>
+      <td>${escapeHTML(m.detalle)}</td>
+      <td>${formatoJabas(m.primera)}</td>
+      <td>${formatoJabas(m.segunda)}</td>
+      <td>${formatoJabas(m.total)}</td>
+    </tr>`).join('') || '<tr><td colspan="6">Sin movimientos</td></tr>';
+  } catch {}
 }
 
-function agregarNuevoInsumo() {
-    const nombre = document.getElementById("nuevo-insumo-nombre").value.trim().toUpperCase();
-    const tipo = document.getElementById("nuevo-insumo-presentacion").value;
-    const cantidad = numero(document.getElementById("nuevo-insumo-stock").value);
-    const fecha = hoy();
+// Clasificación segunda (client-side, no API)
+const CLASES_SEGUNDA = [
+  { key: 'pardo', nombre: 'Pardo' },
+  { key: 'jumbo', nombre: 'Jumbo' },
+  { key: 'suciote', nombre: 'Suciote' },
+  { key: 'limpieza', nombre: 'Para limpieza' },
+  { key: 'quinados', nombre: 'Quiñados' }
+];
+let clasesSegundaCache = {};
+CLASES_SEGUNDA.forEach(c => clasesSegundaCache[c.key] = 0);
 
-    if (!nombre) {
-        mostrarMensaje("Ingrese el nombre del nuevo insumo.", "error");
-        return;
-    }
-
-    if (INSUMOS_INFO[nombre]) {
-        mostrarMensaje("Ese insumo ya existe. Use el formulario de ingreso para aumentar su stock.", "error");
-        return;
-    }
-
-    if (cantidad < 0) {
-        mostrarMensaje("El stock inicial no puede ser negativo.", "error");
-        return;
-    }
-
-    const info = obtenerInfoPorPresentacion(tipo);
-    info.cantidadInicial = cantidad;
-
-    INSUMOS_INFO[nombre] = info;
-    datos.insumosInfo = INSUMOS_INFO;
-    datos.insumos[nombre] = cantidad * info.kgPorUnidad;
-
-    datos.movimientosAlimento.push({
-        fecha,
-        tipo: "Nuevo insumo",
-        detalle: nombre,
-        cantidad: cantidad + " " + info.unidadCompra
-    });
-
-    guardarDatos();
-    document.getElementById("nuevo-insumo-nombre").value = "";
-    document.getElementById("nuevo-insumo-stock").value = "0";
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    mostrarMensaje("Nuevo insumo agregado correctamente.");
+function guardarClasificacionSegunda() {
+  CLASES_SEGUNDA.forEach(c => {
+    const input = $('segunda-' + c.key);
+    if (input) clasesSegundaCache[c.key] = Math.max(0, numero(input.value));
+  });
+  mostrarMensaje('Clasificación guardada localmente');
+  actualizarClasesSegunda();
 }
 
-function eliminarInsumo() {
-    const insumo = document.getElementById("admin-insumo-eliminar").value;
-
-    if (!insumo) {
-        mostrarMensaje("Seleccione un insumo para eliminar.", "error");
-        return;
-    }
-
-    if (!confirm("¿Desea eliminar el insumo " + insumo + "? También se quitará de las fórmulas.")) {
-        return;
-    }
-
-    delete INSUMOS_INFO[insumo];
-    delete datos.insumos[insumo];
-
-    Object.keys(FORMULAS_MOLINO).forEach(formula => {
-        delete FORMULAS_MOLINO[formula].insumos[insumo];
-    });
-
-    datos.insumosInfo = INSUMOS_INFO;
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    datos.movimientosAlimento.push({
-        fecha: hoy(),
-        tipo: "Insumo eliminado",
-        detalle: insumo,
-        cantidad: "Eliminado del almacén y de las fórmulas"
-    });
-
-    guardarDatos();
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    cargarEditorFormula();
-    mostrarMensaje("Insumo eliminado correctamente.");
+function actualizarClasesSegunda() {
+  const cards = $('cards-clases-segunda');
+  if (cards) {
+    const total = CLASES_SEGUNDA.reduce((s, c) => s + numero(clasesSegundaCache[c.key]), 0);
+    cards.innerHTML = CLASES_SEGUNDA.map(c =>
+      `<div class="card mini-card">
+        <span>${c.nombre}</span>
+        <strong>${formatoJabas(clasesSegundaCache[c.key])}</strong>
+      </div>`
+    ).join('') +
+      `<div class="card mini-card card-total">
+        <span>Total clasificado</span>
+        <strong>${formatoJabas(total)}</strong>
+      </div>`;
+  }
+  CLASES_SEGUNDA.forEach(c => {
+    const input = $('segunda-' + c.key);
+    if (input) input.value = numero(clasesSegundaCache[c.key]);
+  });
 }
 
-function consumirAlimento() {
-    const galpon = document.getElementById("consumo-galpon").value;
-    const sacos = numero(document.getElementById("consumo-kg").value);
-    const kg = sacos * KG_POR_SACO_BALANCEADO;
-    const fecha = hoy();
-
-    if (estaCerrado(fecha)) {
-        mostrarMensaje("No se puede registrar. El día ya fue cerrado.", "error");
-        return;
+// ==================== ALMACÉN INSUMOS ====================
+async function actualizarInsumos() {
+  try {
+    const insumos = await api('GET', '/api/insumos') || [];
+    const tbody = $('tabla-insumos');
+    if (tbody) {
+      tbody.innerHTML = insumos.map(i => {
+        const kg = numero(i.cantidad_kg);
+        const minimo = numero(i.stock_minimo_kg) || (numero(i.kg_por_unidad) || 50);
+        const estado = kg <= minimo ? 'Crítico' : (kg <= minimo * 2 ? 'Próximo a agotarse' : 'Correcto');
+        const claseEstado = kg <= minimo ? 'estado-critico' : (kg <= minimo * 2 ? 'estado-advertencia' : 'estado-correcto');
+        const pct = Math.max(0, Math.min(100, (kg / (minimo * 4)) * 100));
+        const lectura = kg <= minimo ? 'Reponer de inmediato' : (kg <= minimo * 2 ? 'Planificar compra' : 'Stock suficiente');
+        const etiqueta = i.etiqueta || i.unidad_compra || '';
+        return `<tr>
+          <td><span class="estado-stock ${claseEstado}">${estado}</span></td>
+          <td><strong>${escapeHTML(i.nombre)}</strong></td>
+          <td>${escapeHTML(etiqueta)}</td>
+          <td>${kg.toFixed(2)}</td>
+          <td>${kg.toFixed(2)} kg</td>
+          <td>${minimo.toFixed(2)} kg</td>
+          <td>
+            <div class="stock-lectura">
+              <span>${lectura}</span>
+              <div class="barra-stock"><div style="width:${pct.toFixed(0)}%"></div></div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7">Sin insumos</td></tr>';
     }
-
-    if (sacos <= 0) {
-        mostrarMensaje("El consumo de alimento es obligatorio. Ingrese la cantidad de sacos entregados.", "error");
-        return;
-    }
-
-    if (kg > numero(datos.alimentoPorGalpon[galpon])) {
-        mostrarMensaje("No se puede entregar alimento. Stock insuficiente para " + galpon + ".", "error");
-        return;
-    }
-
-    datos.alimentoPorGalpon[galpon] -= kg;
-
-    datos.movimientosAlimento.push({
-        fecha,
-        tipo: "Salida de alimento",
-        detalle: "Consumo obligatorio - " + galpon,
-        cantidad: sacos + " sacos de 50 kg (" + kg + " kg)"
-    });
-
-    guardarDatos();
-    document.getElementById("consumo-kg").value = "";
-    actualizarTodo();
-    mostrarMensaje("Consumo de alimento registrado y descontado del stock.");
+    const totalKg = insumos.reduce((s, i) => s + numero(i.cantidad_kg), 0);
+    if ($('stock-insumos-total')) $('stock-insumos-total').textContent = totalKg.toFixed(0) + ' kg';
+  } catch {}
 }
 
-// -------------------- MOLINO --------------------
-
-function cargarEditorFormula() {
-    const formula = document.getElementById("edit-formula")?.value;
-    const destinoInput = document.getElementById("edit-formula-destino");
-    const contenedor = document.getElementById("editor-formula-preview");
-
-    if (!formula || !FORMULAS_MOLINO[formula]) {
-        if (destinoInput) destinoInput.value = "";
-        if (contenedor) contenedor.innerHTML = "<p>No hay fórmula seleccionada.</p>";
-        return;
-    }
-
-    destinoInput.value = FORMULAS_MOLINO[formula].destino;
-    actualizarKgFormulaPorInsumo();
-
-    const insumos = FORMULAS_MOLINO[formula].insumos;
-    const filas = Object.keys(insumos).map(insumo => `
-        <div class="formula-item">
-            <strong>${insumo}</strong>
-            <span>${numero(insumos[insumo]).toFixed(2)} kg por tanda</span>
-        </div>
-    `).join("");
-
-    contenedor.innerHTML = filas || "<p>Esta fórmula aún no tiene insumos.</p>";
+async function ingresarInsumo() {
+  const sel = $('insumo-nombre');
+  if (!sel) return;
+  const insumoId = Number(sel.value);
+  const cantidad = numero($('insumo-kg')?.value);
+  if (!insumoId) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
+  if (cantidad <= 0) { mostrarMensaje('Ingrese una cantidad válida', 'error'); return; }
+  try {
+    await api('PUT', '/api/insumos/' + insumoId + '/ingreso', { cantidad_kg: cantidad });
+    mostrarMensaje('Ingreso registrado');
+    $('insumo-kg').value = '';
+    actualizarInsumos();
+    actualizarAlimentoBalanceado();
+    actualizarMovimientosAlimento();
+  } catch {}
 }
 
-function actualizarKgFormulaPorInsumo() {
-    const formula = document.getElementById("edit-formula")?.value;
-    const insumo = document.getElementById("edit-formula-insumo")?.value;
-    const inputKg = document.getElementById("edit-formula-kg");
-
-    if (!formula || !insumo || !inputKg || !FORMULAS_MOLINO[formula]) return;
-
-    const valorActual = FORMULAS_MOLINO[formula].insumos[insumo];
-    inputKg.value = valorActual !== undefined ? valorActual : "";
+// ==================== ALIMENTO BALANCEADO ====================
+async function actualizarAlimentoBalanceado() {
+  try {
+    const data = await api('GET', '/api/molino/alimento') || [];
+    const tbody = $('tabla-balanceado');
+    if (tbody) {
+      tbody.innerHTML = data.map(a => {
+        const kg = numero(a.kg);
+        const sacosVal = kg / 50;
+        const estado = sacosVal < 5 ? '<span class="estado-stock estado-critico">Bajo mínimo</span>' : '<span class="estado-stock estado-correcto">Correcto</span>';
+        return `<tr>
+          <td>${escapeHTML(a.galpon_nombre || '')}</td>
+          <td>${sacosVal.toFixed(2)} sacos</td>
+          <td>${kg.toFixed(2)} kg</td>
+          <td>${estado}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4">Sin datos</td></tr>';
+    }
+    const totalKg = data.reduce((s, a) => s + numero(a.kg), 0);
+    if ($('stock-balanceado-total')) $('stock-balanceado-total').textContent = (totalKg / 50).toFixed(0) + ' sacos';
+  } catch {}
 }
 
-function guardarDestinoFormula() {
-    const formula = document.getElementById("edit-formula").value;
-    const destino = document.getElementById("edit-formula-destino").value.trim();
-
-    if (!formula || !FORMULAS_MOLINO[formula]) {
-        mostrarMensaje("Seleccione una fórmula válida.", "error");
-        return;
-    }
-
-    if (!destino) {
-        mostrarMensaje("Ingrese el galpón o destino de la fórmula.", "error");
-        return;
-    }
-
-    if (datos.gallinas[destino] === undefined) {
-        mostrarMensaje("Ese galpón no existe. Primero agréguelo en Administrador.", "error");
-        return;
-    }
-
-    FORMULAS_MOLINO[formula].destino = destino;
-    if (datos.alimentoPorGalpon[destino] === undefined) datos.alimentoPorGalpon[destino] = 0;
-
-    datos.formulasMolino = FORMULAS_MOLINO;
-    guardarDatos();
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    cargarEditorFormula();
-    mostrarMensaje("Destino de fórmula actualizado.");
+async function actualizarMovimientosAlimento() {
+  try {
+    const movs = await api('GET', '/api/molino/movimientos') || [];
+    const tbody = $('tabla-alimento-mov');
+    if (!tbody) return;
+    tbody.innerHTML = movs.map(m => `<tr>
+      <td>${m.fecha}</td>
+      <td>${escapeHTML(m.tipo)}</td>
+      <td>${escapeHTML(m.detalle)}</td>
+      <td>${escapeHTML(m.cantidad || '')}</td>
+    </tr>`).join('') || '<tr><td colspan="4">Sin movimientos</td></tr>';
+  } catch {}
 }
 
-function agregarOActualizarInsumoFormula() {
-    const formula = document.getElementById("edit-formula").value;
-    const insumo = document.getElementById("edit-formula-insumo").value;
-    const kg = numero(document.getElementById("edit-formula-kg").value);
-
-    if (!formula || !FORMULAS_MOLINO[formula]) {
-        mostrarMensaje("Seleccione una fórmula válida.", "error");
-        return;
-    }
-
-    if (!insumo || !INSUMOS_INFO[insumo]) {
-        mostrarMensaje("Seleccione un insumo válido.", "error");
-        return;
-    }
-
-    if (kg <= 0) {
-        mostrarMensaje("Ingrese los kg que se usan por tanda.", "error");
-        return;
-    }
-
-    FORMULAS_MOLINO[formula].insumos[insumo] = kg;
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    guardarDatos();
-    cargarEditorFormula();
-    mostrarMensaje("Insumo agregado o actualizado en la fórmula.");
+async function consumirAlimento() {
+  const sel = $('consumo-galpon');
+  if (!sel) return;
+  const galponId = Number(sel.value);
+  const sacos = numero($('consumo-kg')?.value);
+  if (!galponId) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
+  if (sacos <= 0) { mostrarMensaje('Ingrese la cantidad de sacos', 'error'); return; }
+  try {
+    await api('POST', '/api/molino/alimento/consumir', { galpon_id: galponId, sacos, fecha: hoy() });
+    mostrarMensaje('Consumo registrado');
+    $('consumo-kg').value = '';
+    actualizarAlimentoBalanceado();
+    actualizarMovimientosAlimento();
+    actualizarDashboard();
+  } catch {}
 }
 
-function quitarInsumoDeFormula() {
-    const formula = document.getElementById("edit-formula").value;
-    const insumo = document.getElementById("edit-formula-insumo").value;
+// ==================== MOLINO ====================
+let formulaPreviewData = null;
 
-    if (!formula || !FORMULAS_MOLINO[formula]) {
-        mostrarMensaje("Seleccione una fórmula válida.", "error");
-        return;
-    }
-
-    if (!FORMULAS_MOLINO[formula].insumos[insumo]) {
-        mostrarMensaje("Ese insumo no está en la fórmula.", "error");
-        return;
-    }
-
-    delete FORMULAS_MOLINO[formula].insumos[insumo];
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    guardarDatos();
-    cargarEditorFormula();
-    mostrarMensaje("Insumo eliminado de la fórmula.");
+async function cargarFormulasMolino() {
+  try {
+    return await api('GET', '/api/molino/formulas') || [];
+  } catch { return []; }
 }
 
-function crearFormula() {
-    const nombre = document.getElementById("nueva-formula-nombre").value.trim().toUpperCase();
-    const destino = document.getElementById("nueva-formula-destino").value.trim();
-
-    if (!nombre || !destino) {
-        mostrarMensaje("Ingrese el nombre de la fórmula y el destino.", "error");
-        return;
-    }
-
-    if (datos.gallinas[destino] === undefined) {
-        mostrarMensaje("Ese galpón no existe. Primero agréguelo en Administrador.", "error");
-        return;
-    }
-
-    if (FORMULAS_MOLINO[nombre]) {
-        mostrarMensaje("Esa fórmula ya existe.", "error");
-        return;
-    }
-
-    FORMULAS_MOLINO[nombre] = { destino, insumos: {} };
-    datos.formulasMolino = FORMULAS_MOLINO;
-    if (datos.alimentoPorGalpon[destino] === undefined) datos.alimentoPorGalpon[destino] = 0;
-
-    guardarDatos();
-    document.getElementById("nueva-formula-nombre").value = "";
-    document.getElementById("nueva-formula-destino").value = "";
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    cargarEditorFormula();
-    mostrarMensaje("Nueva fórmula creada. Ahora puede agregarle insumos.");
-}
-
-function eliminarFormula() {
-    const formula = document.getElementById("edit-formula").value;
-
-    if (!formula || !FORMULAS_MOLINO[formula]) {
-        mostrarMensaje("Seleccione una fórmula para eliminar.", "error");
-        return;
-    }
-
-    if (!confirm("¿Desea eliminar la fórmula " + formula + "?")) {
-        return;
-    }
-
-    delete FORMULAS_MOLINO[formula];
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    guardarDatos();
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    cargarEditorFormula();
-    mostrarMensaje("Fórmula eliminada correctamente.");
-}
-
-function normalizarTexto(valor) {
-    return String(valor || "")
-        .toUpperCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim();
-}
-
-function obtenerFormulaPorGalpon(galpon) {
-    const buscado = normalizarTexto(galpon);
-    const nombreFormula = Object.keys(FORMULAS_MOLINO).find(nombre => {
-        return normalizarTexto(FORMULAS_MOLINO[nombre].destino) === buscado;
-    });
-
-    return nombreFormula || "";
-}
-
-function actualizarFormulaMolinoPorGalpon() {
-    const selectGalpon = document.getElementById("molino-galpon");
-    const inputFormula = document.getElementById("molino-formula-actual");
-    const preview = document.getElementById("formula-preview");
-
-    if (!selectGalpon || !inputFormula) return "";
-
-    const galpon = selectGalpon.value;
-    const formula = obtenerFormulaPorGalpon(galpon);
-
-    inputFormula.value = formula || "Sin fórmula registrada";
-
-    if (preview) {
-        preview.innerHTML = formula
-            ? `<p>Fórmula cargada automáticamente para <strong>${galpon}</strong>: <strong>${formula}</strong>.</p>`
-            : `<p class="texto-error">No existe fórmula registrada para ${galpon}. Puede crearla o asignarla desde Administrador.</p>`;
-    }
-
+async function actualizarFormulaMolinoPorGalpon() {
+  const selGalpon = $('molino-galpon');
+  const inputFormula = $('molino-formula-actual');
+  const preview = $('formula-preview');
+  if (!selGalpon || !inputFormula) return '';
+  const galponId = Number(selGalpon.value);
+  if (!galponId) {
+    inputFormula.value = 'Seleccione un galpón';
+    if (preview) preview.innerHTML = '';
+    return '';
+  }
+  const formulas = await cargarFormulasMolino();
+  const formula = (formulas || []).find(f => Number(f.galpon_id) === galponId);
+  if (formula) {
+    inputFormula.value = formula.nombre || '';
+    if (preview) preview.innerHTML = `<p>Fórmula: <strong>${escapeHTML(formula.nombre)}</strong> (${escapeHTML(formula.galpon_nombre || '')})</p>`;
+    formulaPreviewData = formula;
     return formula;
-}
-
-function calcularInsumosMolino(formula, tandas) {
-    const resultado = {};
-    const datosFormula = FORMULAS_MOLINO[formula];
-
-    if (!datosFormula) return resultado;
-
-    Object.keys(datosFormula.insumos).forEach(insumo => {
-        resultado[insumo] = datosFormula.insumos[insumo] * tandas;
-    });
-
-    return resultado;
+  } else {
+    inputFormula.value = 'Sin fórmula registrada';
+    if (preview) preview.innerHTML = `<p class="texto-error">No hay fórmula para este galpón. Créela en Administrador.</p>`;
+    formulaPreviewData = null;
+    return null;
+  }
 }
 
 function verFormulaMolino() {
-    const formula = actualizarFormulaMolinoPorGalpon();
-    const tandas = numero(document.getElementById("molino-kg").value);
-    const contenedor = document.getElementById("formula-preview");
-
-    if (!formula) {
-        contenedor.innerHTML = "<p class='texto-error'>No existe fórmula para el galpón seleccionado.</p>";
-        return;
-    }
-
-    if (tandas <= 0) {
-        contenedor.innerHTML = "<p>Ingrese el número de tandas para ver los insumos.</p>";
-        return;
-    }
-
-    const insumos = calcularInsumosMolino(formula, tandas);
-    const kgProducidos = tandas * KG_PRODUCIDOS_POR_TANDA;
-    const sacosProducidos = tandas * SACOS_POR_TANDA;
-
-    let html = `
-        <div class="formula-resumen">
-            <strong>${formula}</strong>
-            <span>${tandas} tanda(s) = ${sacosProducidos} sacos de 50 kg = ${kgProducidos} kg producidos</span>
-        </div>
-    `;
-
-    html += Object.keys(insumos).map(nombre => {
-        const disponible = numero(datos.insumos[nombre]);
-        const restante = disponible - numero(insumos[nombre]);
-        const clase = restante < 0 ? "texto-error" : "";
-        return `
-            <div class="formula-item">
-                <strong>${nombre}</strong>
-                <span>${insumos[nombre].toFixed(2)} kg usados</span>
-                <span class="${clase}">Stock luego: ${restante.toFixed(2)} kg</span>
-            </div>
-        `;
-    }).join("");
-
-    contenedor.innerHTML = html;
+  const preview = $('formula-preview');
+  const tandas = numero($('molino-kg')?.value);
+  if (!formulaPreviewData) {
+    if (preview) preview.innerHTML = '<p class="texto-error">No hay fórmula seleccionada</p>';
+    return;
+  }
+  if (tandas <= 0) {
+    if (preview) preview.innerHTML = '<p>Ingrese el número de tandas</p>';
+    return;
+  }
+  const insumos = formulaPreviewData.insumos || [];
+  const totalKg = insumos.reduce((s, i) => s + numero(i.kg_por_tanda), 0) * tandas;
+  const sacosProducidos = tandas * 30;
+  let html = `<div class="formula-resumen">
+    <strong>${escapeHTML(formulaPreviewData.nombre)}</strong>
+    <span>${tandas} tanda(s) = ${sacosProducidos} sacos de 50 kg = ${totalKg.toFixed(2)} kg producidos</span>
+  </div>`;
+  html += insumos.map(i => {
+    const usado = numero(i.kg_por_tanda) * tandas;
+    return `<div class="formula-item">
+      <strong>${escapeHTML(i.insumo_nombre || '')}</strong>
+      <span>${usado.toFixed(2)} kg usados</span>
+    </div>`;
+  }).join('');
+  if (preview) preview.innerHTML = html;
 }
 
-function producirMolino() {
-    const fecha = document.getElementById("molino-fecha").value;
-    const galponDestino = document.getElementById("molino-galpon").value;
-    const formula = actualizarFormulaMolinoPorGalpon();
-    const tandas = numero(document.getElementById("molino-kg").value);
-
-    if (!fecha) {
-        mostrarMensaje("Debe registrar la fecha de producción del molino.", "error");
-        return;
-    }
-
-    if (estaCerrado(fecha)) {
-        mostrarMensaje("No se puede registrar. El día ya fue cerrado.", "error");
-        return;
-    }
-
-    if (tandas <= 0) {
-        mostrarMensaje("Ingrese una cantidad válida de tandas.", "error");
-        return;
-    }
-
-    const datosFormula = FORMULAS_MOLINO[formula];
-    if (!datosFormula) {
-        mostrarMensaje("El galpón seleccionado no tiene fórmula registrada.", "error");
-        return;
-    }
-
-    const insumosUsados = calcularInsumosMolino(formula, tandas);
-    if (Object.keys(insumosUsados).length === 0) {
-        mostrarMensaje("La fórmula seleccionada no tiene insumos registrados.", "error");
-        return;
-    }
-
-    // Validar stock antes de descontar
-    for (let insumo in insumosUsados) {
-        if (insumosUsados[insumo] > numero(datos.insumos[insumo])) {
-            mostrarMensaje("Stock insuficiente de " + insumo + ". Necesita " + insumosUsados[insumo].toFixed(2) + " kg y solo hay " + numero(datos.insumos[insumo]).toFixed(2) + " kg.", "error");
-            return;
-        }
-    }
-
-    // Descontar insumos usados por el molino y registrar stock restante
-    for (let insumo in insumosUsados) {
-        datos.insumos[insumo] -= insumosUsados[insumo];
-        datos.movimientosAlimento.push({
-            fecha,
-            tipo: "Consumo insumo molino",
-            detalle: insumo,
-            cantidad: insumosUsados[insumo].toFixed(2) + " kg usados | Stock restante: " + numero(datos.insumos[insumo]).toFixed(2) + " kg"
-        });
-    }
-
-    // Aumentar alimento producido para el galpón/fórmula destino
-    const kgProducidos = tandas * KG_PRODUCIDOS_POR_TANDA;
-    const sacosProducidos = tandas * SACOS_POR_TANDA;
-    const destino = galponDestino || datosFormula.destino;
-
-    if (!datos.alimentoPorGalpon[destino]) datos.alimentoPorGalpon[destino] = 0;
-    datos.alimentoPorGalpon[destino] += kgProducidos;
-
-    const resumenInsumos = Object.keys(insumosUsados)
-        .map(i => i + ": " + insumosUsados[i].toFixed(2) + " kg")
-        .join(", ");
-
-    datos.molino.push({
-        fecha,
-        formula,
-        destino,
-        tandas,
-        sacos: sacosProducidos,
-        kg: kgProducidos,
-        insumos: resumenInsumos
-    });
-
-    datos.movimientosAlimento.push({
-        fecha,
-        tipo: "Producción molino",
-        detalle: destino,
-        cantidad: sacosProducidos + " sacos de 50 kg (" + kgProducidos + " kg)"
-    });
-
-    guardarDatos();
-    document.getElementById("molino-kg").value = "";
-    document.getElementById("formula-preview").innerHTML = "";
-    actualizarTodo();
-    mostrarMensaje("Molino registrado. Se descontaron insumos y se aumentó el alimento producido.");
-}
-
-// -------------------- VENTAS --------------------
-function actualizarStockVentas() {
-    const primera = numero(datos.stockHuevos.primera);
-    const segunda = numero(datos.stockHuevos.segunda);
-    const total = primera + segunda;
-
-    const stockTotal = document.getElementById("ventas-stock-total");
-    const stockPrimera = document.getElementById("ventas-stock-primera");
-    const stockSegunda = document.getElementById("ventas-stock-segunda");
-
-    if (stockTotal) stockTotal.textContent = total + " jabas";
-    if (stockPrimera) stockPrimera.textContent = primera + " jabas";
-    if (stockSegunda) stockSegunda.textContent = segunda + " jabas";
-}
-
-function calcularTotalVenta() {
-    const primera = numero(document.getElementById("venta-primera")?.value);
-    const segunda = numero(document.getElementById("venta-segunda")?.value);
-    const promedioKgJaba = numero(document.getElementById("venta-promedio-kg-jaba")?.value);
-    const precio = numero(document.getElementById("venta-precio")?.value);
-
-    const totalJabas = primera + segunda;
-    const peso = totalJabas * promedioKgJaba;
-    const total = peso * precio;
-
-    const totalJabasEl = document.getElementById("venta-total-jabas");
-    const pesoEl = document.getElementById("venta-peso");
-    const totalEl = document.getElementById("venta-total");
-
-    if (totalJabasEl) totalJabasEl.value = totalJabas;
-    if (pesoEl) pesoEl.value = peso.toFixed(2);
-    if (totalEl) totalEl.textContent = "Total: S/ " + total.toFixed(2);
-}
-
-function guardarVenta() {
-    const cliente = document.getElementById("venta-cliente").value.trim();
-    const fecha = document.getElementById("venta-fecha").value;
-    const primera = numero(document.getElementById("venta-primera").value);
-    const segunda = numero(document.getElementById("venta-segunda").value);
-    const promedioKgJaba = numero(document.getElementById("venta-promedio-kg-jaba").value);
-    const precio = numero(document.getElementById("venta-precio").value);
-
-    const totalJabas = primera + segunda;
-    const peso = totalJabas * promedioKgJaba;
-    const total = peso * precio;
-
-    if (!fecha) {
-        mostrarMensaje("Debe registrar la fecha de la transacción.", "error");
-        return;
-    }
-
-    if (estaCerrado(fecha)) {
-        mostrarMensaje("No se puede registrar. El día ya fue cerrado.", "error");
-        return;
-    }
-
-    if (!cliente) {
-        mostrarMensaje("Ingrese el nombre del cliente.", "error");
-        return;
-    }
-
-    if (totalJabas <= 0) {
-        mostrarMensaje("Ingrese jabas de primera o de segunda.", "error");
-        return;
-    }
-
-    if (promedioKgJaba <= 0 || precio <= 0) {
-        mostrarMensaje("Complete correctamente promedio de kilos por jaba y precio por kg.", "error");
-        return;
-    }
-
-    if (primera > numero(datos.stockHuevos.primera)) {
-        mostrarMensaje("No hay suficiente stock de jabas de primera.", "error");
-        return;
-    }
-
-    if (segunda > numero(datos.stockHuevos.segunda)) {
-        mostrarMensaje("No hay suficiente stock de jabas de segunda.", "error");
-        return;
-    }
-
-    const idVenta = Date.now();
-    let detalleFIFO = [];
-
-    if (primera > 0) {
-        const salidaPrimera = descontarHuevosFIFO("primera", primera);
-        if (!salidaPrimera.ok) {
-            mostrarMensaje(salidaPrimera.mensaje, "error");
-            return;
-        }
-        detalleFIFO = detalleFIFO.concat(salidaPrimera.detalle);
-    }
-
-    if (segunda > 0) {
-        const salidaSegunda = descontarHuevosFIFO("segunda", segunda);
-        if (!salidaSegunda.ok) {
-            mostrarMensaje(salidaSegunda.mensaje, "error");
-            return;
-        }
-        detalleFIFO = detalleFIFO.concat(salidaSegunda.detalle);
-    }
-
-    datos.ventas.push({
-        id: idVenta,
-        fecha,
-        cliente,
-        primera,
-        segunda,
-        totalJabas,
-        promedioKgJaba,
-        peso,
-        precio,
-        total,
-        detalleFIFO
-    });
-
-    registrarMovimientoHuevos(
-        fecha,
-        "Salida",
-        "Venta a " + cliente,
-        primera,
-        segunda,
-        idVenta,
-        null
-    );
-
-    guardarDatos();
-    limpiarVenta();
-    actualizarTodo();
-    mostrarMensaje("Venta registrada. El stock de almacén se descontó automáticamente.");
-}
-
-function limpiarVenta() {
-    document.getElementById("venta-cliente").value = "";
-    document.getElementById("venta-primera").value = 0;
-    document.getElementById("venta-segunda").value = 0;
-    document.getElementById("venta-promedio-kg-jaba").value = 18;
-    document.getElementById("venta-precio").value = "6.00";
-    calcularTotalVenta();
-}
-
-function eliminarVenta(idVenta) {
-    const venta = datos.ventas.find(v => v.id === idVenta);
-
-    if (!venta) {
-        mostrarMensaje("No se encontró la venta.", "error");
-        return;
-    }
-
-    const confirmar = confirm("¿Seguro que deseas eliminar esta venta? El stock volverá al almacén.");
-    if (!confirmar) return;
-
-    if (venta.detalleFIFO && venta.detalleFIFO.length > 0) {
-        venta.detalleFIFO.forEach(detalle => {
-            const lote = datos.lotesHuevos.find(l => l.id === detalle.loteId);
-            if (lote) lote.cantidadDisponible += numero(detalle.cantidad);
-        });
-    } else {
-        // Compatibilidad con ventas antiguas sin detalle FIFO.
-        if (numero(venta.primera) > 0) agregarLoteHuevos(venta.fecha, "Devolución venta", "Primera", venta.primera, null);
-        if (numero(venta.segunda) > 0) agregarLoteHuevos(venta.fecha, "Devolución venta", "Segunda", venta.segunda, null);
-    }
-
-    datos.stockHuevos.primera += numero(venta.primera);
-    datos.stockHuevos.segunda += numero(venta.segunda);
-    sincronizarStockJabas();
-
-    datos.ventas = datos.ventas.filter(v => v.id !== idVenta);
-    datos.movimientosHuevos = datos.movimientosHuevos.filter(m => m.ventaId !== idVenta);
-
-    guardarDatos();
-    actualizarTodo();
-    mostrarMensaje("Venta eliminada correctamente. El stock fue restaurado.");
-}
-
-// -------------------- DASHBOARD Y TABLAS --------------------
-function actualizarTodo() {
-    actualizarDashboard();
-    actualizarTablaProduccion();
-    actualizarTablaAlmacenHuevos();
-    actualizarAlimento();
+async function producirMolino() {
+  const fecha = $('molino-fecha')?.value;
+  const selGalpon = $('molino-galpon');
+  const tandas = numero($('molino-kg')?.value);
+  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
+  if (!selGalpon || !selGalpon.value) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
+  if (tandas <= 0) { mostrarMensaje('Ingrese tandas válidas', 'error'); return; }
+  if (!formulaPreviewData || !formulaPreviewData.id) { mostrarMensaje('El galpón no tiene fórmula', 'error'); return; }
+  try {
+    await api('POST', '/api/molino/producir', { fecha, formula_id: formulaPreviewData.id, tandas });
+    mostrarMensaje('Producción de alimento registrada');
+    $('molino-kg').value = '';
+    $('formula-preview').innerHTML = '';
     actualizarTablaMolino();
+    actualizarAlimentoBalanceado();
+    actualizarMovimientosAlimento();
+    actualizarDashboard();
+  } catch {}
+}
+
+async function actualizarTablaMolino() {
+  try {
+    const lista = await api('GET', '/api/molino/produccion') || [];
+    const tbody = $('tabla-molino');
+    if (!tbody) return;
+    tbody.innerHTML = lista.map(m => `<tr>
+      <td>${m.fecha}</td>
+      <td>${escapeHTML(m.galpon_nombre || m.destino || '')}</td>
+      <td>${m.tandas || 1}</td>
+      <td>${m.sacos || (numero(m.kg) / 50).toFixed(0)} sacos</td>
+      <td>${numero(m.kg).toFixed(2)} kg</td>
+      <td><button class="btn btn-secondary" onclick="verDetalleMolino(${m.id})">Detalle</button></td>
+    </tr>`).join('') || '<tr><td colspan="6">Sin producción</td></tr>';
+  } catch {}
+}
+
+async function verDetalleMolino(id) {
+  try {
+    const data = await api('GET', '/api/molino/produccion/' + id + '/detalle');
+    const cont = $('voucher-molino');
+    if (!cont || !data) return;
+    const p = data.produccion || {};
+    const detalle = data.detalle || [];
+    const filas = detalle.map(d => `<tr>
+      <td>${escapeHTML(d.insumo_nombre || '')}</td>
+      <td>${numero(d.kg_usado).toFixed(2)} kg</td>
+      <td>${numero(d.stock_restante).toFixed(2)} kg</td>
+    </tr>`).join('');
+    cont.classList.remove('hidden');
+    cont.innerHTML = `<div class="voucher-header">
+      <div>
+        <h3>Voucher de producción del molino</h3>
+        <p><strong>Fecha:</strong> ${escapeHTML(p.fecha)} | <strong>Destino:</strong> ${escapeHTML(p.galpon_nombre || p.destino || '')}</p>
+        <p><strong>Fórmula:</strong> ${escapeHTML(p.formula_nombre || '')} | <strong>Tandas:</strong> ${p.tandas || ''}</p>
+        <p><strong>Producción:</strong> ${p.sacos || ''} sacos (${numero(p.kg).toFixed(2)} kg)</p>
+      </div>
+      <button class="btn btn-light" onclick="cerrarDetalleMolino()">Cerrar</button>
+    </div>
+    <div class="table-box voucher-tabla">
+      <table><thead><tr><th>Insumo</th><th>Usado</th><th>Stock restante</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="3">Sin detalle</td></tr>'}</tbody></table>
+    </div>`;
+    cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch {}
+}
+
+function cerrarDetalleMolino() {
+  const cont = $('voucher-molino');
+  if (cont) { cont.classList.add('hidden'); cont.innerHTML = ''; }
+}
+
+// ==================== VENTAS ====================
+function calcularTotalVenta() {
+  const primera = numero($('venta-primera')?.value);
+  const segunda = numero($('venta-segunda')?.value);
+  const prom = numero($('venta-promedio-kg-jaba')?.value);
+  const pp = numero($('venta-precio-primera')?.value);
+  const ps = numero($('venta-precio-segunda')?.value);
+  const totalJabas = primera + segunda;
+  const pesoPrimera = primera * prom;
+  const pesoSegunda = segunda * prom;
+  const peso = pesoPrimera + pesoSegunda;
+  const totalPrimera = pesoPrimera * pp;
+  const totalSegunda = pesoSegunda * ps;
+  const total = totalPrimera + totalSegunda;
+  if ($('venta-total-jabas')) $('venta-total-jabas').value = formatoJabas(totalJabas);
+  if ($('venta-peso')) $('venta-peso').value = peso.toFixed(2);
+  const el = $('venta-total');
+  if (el) {
+    el.innerHTML = `Total: S/ ${total.toFixed(2)} <small class="total-detalle">Primera: S/ ${totalPrimera.toFixed(2)} | Segunda: S/ ${totalSegunda.toFixed(2)}</small>`;
+  }
+}
+
+async function guardarVenta() {
+  const clienteSelect = $('venta-cliente-select');
+  const clienteNombreInput = $('venta-cliente');
+  let clienteId = null;
+  let clienteNombre = '';
+  if (clienteSelect && clienteSelect.value) {
+    clienteId = Number(clienteSelect.value);
+    const opt = clienteSelect.options[clienteSelect.selectedIndex];
+    if (opt) clienteNombre = opt.dataset.nombre || opt.text;
+  } else if (clienteNombreInput) {
+    clienteNombre = clienteNombreInput.value.trim();
+  }
+  const fecha = $('venta-fecha')?.value;
+  const primera = numero($('venta-primera')?.value);
+  const segunda = numero($('venta-segunda')?.value);
+  const prom = numero($('venta-promedio-kg-jaba')?.value);
+  const pp = numero($('venta-precio-primera')?.value);
+  const ps = numero($('venta-precio-segunda')?.value);
+
+  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
+  if (!clienteNombre) { mostrarMensaje('Ingrese o seleccione el cliente', 'error'); return; }
+  if (primera + segunda <= 0) { mostrarMensaje('Ingrese jabas de primera o segunda', 'error'); return; }
+  if (!esCantidadJabasValida(primera) || !esCantidadJabasValida(segunda)) { mostrarMensaje('Solo jabas enteras o medias jabas', 'error'); return; }
+  if (prom <= 0 || pp <= 0 || ps <= 0) { mostrarMensaje('Complete precio y promedio', 'error'); return; }
+
+  try {
+    await api('POST', '/api/ventas', { fecha, cliente_id: clienteId, cliente_nombre: clienteNombre, primera, segunda, promedio_kg_jaba: prom, precio_primera: pp, precio_segunda: ps });
+    mostrarMensaje('Venta registrada');
+    if ($('venta-cliente')) $('venta-cliente').value = '';
+    if ($('venta-cliente-select')) $('venta-cliente-select').value = '';
+    $('venta-primera').value = 0;
+    $('venta-segunda').value = 0;
+    $('venta-promedio-kg-jaba').value = 18;
+    $('venta-precio-primera').value = '6.00';
+    $('venta-precio-segunda').value = '5.00';
+    calcularTotalVenta();
     actualizarTablaVentas();
-    actualizarDiasCerrados();
+    actualizarAlmacenHuevos();
+    actualizarDashboard();
+  } catch {}
+}
+
+async function eliminarVenta(id) {
+  if (!confirm('¿Eliminar esta venta?')) return;
+  try {
+    await api('DELETE', '/api/ventas/' + id);
+    mostrarMensaje('Venta eliminada');
+    actualizarTablaVentas();
+    actualizarAlmacenHuevos();
+    actualizarDashboard();
+  } catch {}
+}
+
+async function actualizarTablaVentas() {
+  await actualizarAlmacenHuevos();
+  try {
+    const lista = await api('GET', '/api/ventas') || [];
+    const tbody = $('tabla-ventas');
+    if (!tbody) return;
+    tbody.innerHTML = lista.map(v => `<tr>
+      <td>${v.fecha}</td>
+      <td>${escapeHTML(v.cliente_nombre || '')}</td>
+      <td>${formatoJabas(v.primera)}</td>
+      <td>${formatoJabas(v.segunda)}</td>
+      <td>${formatoJabas(numero(v.primera) + numero(v.segunda))}</td>
+      <td>${numero(v.promedio_kg_jaba).toFixed(2)} kg</td>
+      <td>${(numero(v.primera) * numero(v.promedio_kg_jaba) + numero(v.segunda) * numero(v.promedio_kg_jaba)).toFixed(2)} kg</td>
+      <td>S/ ${numero(v.precio_primera).toFixed(2)}</td>
+      <td>S/ ${numero(v.precio_segunda).toFixed(2)}</td>
+      <td>S/ ${(numero(v.primera) * numero(v.promedio_kg_jaba) * numero(v.precio_primera)).toFixed(2)}</td>
+      <td>S/ ${(numero(v.segunda) * numero(v.promedio_kg_jaba) * numero(v.precio_segunda)).toFixed(2)}</td>
+      <td>S/ ${(numero(v.primera) * numero(v.promedio_kg_jaba) * numero(v.precio_primera) + numero(v.segunda) * numero(v.promedio_kg_jaba) * numero(v.precio_segunda)).toFixed(2)}</td>
+      <td><button class="btn btn-danger" onclick="eliminarVenta(${v.id})">Eliminar</button></td>
+    </tr>`).join('') || '<tr><td colspan="13">Sin ventas</td></tr>';
+  } catch {}
+}
+
+// ==================== CLIENTES (CRUD dinámico) ====================
+async function cargarClientes() {
+  try { return await api('GET', '/api/clientes') || []; } catch { return []; }
+}
+
+async function guardarCliente() {
+  const id = $('cliente-id')?.value;
+  const data = {
+    nombre: ($('cliente-nombre')?.value || '').trim(),
+    telefono: ($('cliente-telefono')?.value || '').trim(),
+    direccion: ($('cliente-direccion')?.value || '').trim(),
+    email: ($('cliente-email')?.value || '').trim(),
+    ruc: ($('cliente-ruc')?.value || '').trim()
+  };
+  if (!data.nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', '/api/clientes/' + id, data);
+      mostrarMensaje('Cliente actualizado');
+    } else {
+      await api('POST', '/api/clientes', data);
+      mostrarMensaje('Cliente creado');
+    }
+    limpiarFormCliente();
+    actualizarTablaClientes();
+    poblarSelectores();
+  } catch {}
+}
+
+async function eliminarCliente(id) {
+  if (!confirm('¿Eliminar este cliente?')) return;
+  try {
+    await api('DELETE', '/api/clientes/' + id);
+    mostrarMensaje('Cliente eliminado');
+    actualizarTablaClientes();
+    poblarSelectores();
+  } catch {}
+}
+
+function editarCliente(c) {
+  if ($('cliente-id')) $('cliente-id').value = c.id;
+  if ($('cliente-nombre')) $('cliente-nombre').value = c.nombre || '';
+  if ($('cliente-telefono')) $('cliente-telefono').value = c.telefono || '';
+  if ($('cliente-direccion')) $('cliente-direccion').value = c.direccion || '';
+  if ($('cliente-email')) $('cliente-email').value = c.email || '';
+  if ($('cliente-ruc')) $('cliente-ruc').value = c.ruc || '';
+}
+
+function limpiarFormCliente() {
+  ['cliente-id','cliente-nombre','cliente-telefono','cliente-direccion','cliente-email','cliente-ruc'].forEach(id => {
+    if ($(id)) $(id).value = '';
+  });
+}
+
+async function actualizarTablaClientes() {
+  const lista = await cargarClientes();
+  const tbody = $('tabla-clientes');
+  if (!tbody) return;
+  tbody.innerHTML = lista.map(c => `<tr>
+    <td>${escapeHTML(c.nombre)}</td>
+    <td>${escapeHTML(c.telefono || '')}</td>
+    <td>${escapeHTML(c.direccion || '')}</td>
+    <td>${escapeHTML(c.email || '')}</td>
+    <td>${escapeHTML(c.ruc || '')}</td>
+    <td class="table-actions">
+      <button class="btn btn-secondary" onclick='editarCliente(${JSON.stringify(c).replace(/'/g, "&#39;")});editarCliente(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>
+      <button class="btn btn-danger" onclick="eliminarCliente(${c.id})">Eliminar</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="6">Sin clientes</td></tr>';
+}
+
+// ==================== PROVEEDORES (CRUD dinámico) ====================
+async function cargarProveedores() {
+  try { return await api('GET', '/api/proveedores') || []; } catch { return []; }
+}
+
+async function guardarProveedor() {
+  const id = $('proveedor-id')?.value;
+  const data = {
+    nombre: ($('proveedor-nombre')?.value || '').trim(),
+    telefono: ($('proveedor-telefono')?.value || '').trim(),
+    direccion: ($('proveedor-direccion')?.value || '').trim(),
+    email: ($('proveedor-email')?.value || '').trim(),
+    ruc: ($('proveedor-ruc')?.value || '').trim()
+  };
+  if (!data.nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', '/api/proveedores/' + id, data);
+      mostrarMensaje('Proveedor actualizado');
+    } else {
+      await api('POST', '/api/proveedores', data);
+      mostrarMensaje('Proveedor creado');
+    }
+    limpiarFormProveedor();
+    actualizarTablaProveedores();
+    poblarSelectores();
+  } catch {}
+}
+
+async function eliminarProveedor(id) {
+  if (!confirm('¿Eliminar este proveedor?')) return;
+  try {
+    await api('DELETE', '/api/proveedores/' + id);
+    mostrarMensaje('Proveedor eliminado');
+    actualizarTablaProveedores();
+    poblarSelectores();
+  } catch {}
+}
+
+function editarProveedor(p) {
+  if ($('proveedor-id')) $('proveedor-id').value = p.id;
+  if ($('proveedor-nombre')) $('proveedor-nombre').value = p.nombre || '';
+  if ($('proveedor-telefono')) $('proveedor-telefono').value = p.telefono || '';
+  if ($('proveedor-direccion')) $('proveedor-direccion').value = p.direccion || '';
+  if ($('proveedor-email')) $('proveedor-email').value = p.email || '';
+  if ($('proveedor-ruc')) $('proveedor-ruc').value = p.ruc || '';
+}
+
+function limpiarFormProveedor() {
+  ['proveedor-id','proveedor-nombre','proveedor-telefono','proveedor-direccion','proveedor-email','proveedor-ruc'].forEach(id => {
+    if ($(id)) $(id).value = '';
+  });
+}
+
+async function actualizarTablaProveedores() {
+  const lista = await cargarProveedores();
+  const tbody = $('tabla-proveedores');
+  if (!tbody) return;
+  tbody.innerHTML = lista.map(p => `<tr>
+    <td>${escapeHTML(p.nombre)}</td>
+    <td>${escapeHTML(p.telefono || '')}</td>
+    <td>${escapeHTML(p.direccion || '')}</td>
+    <td>${escapeHTML(p.email || '')}</td>
+    <td>${escapeHTML(p.ruc || '')}</td>
+    <td class="table-actions">
+      <button class="btn btn-secondary" onclick='editarProveedor(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Editar</button>
+      <button class="btn btn-danger" onclick="eliminarProveedor(${p.id})">Eliminar</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="6">Sin proveedores</td></tr>';
+}
+
+// ==================== COMPRAS ====================
+async function guardarCompra() {
+  const fecha = $('compra-fecha')?.value;
+  const provSel = $('compra-proveedor');
+  const insumoSel = $('compra-insumo');
+  const cantidad = numero($('compra-cantidad')?.value);
+  const precio = numero($('compra-precio')?.value);
+  const estado = $('compra-estado')?.value || 'pendiente';
+  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
+  if (!provSel || !provSel.value) { mostrarMensaje('Seleccione un proveedor', 'error'); return; }
+  if (!insumoSel || !insumoSel.value) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
+  if (cantidad <= 0 || precio <= 0) { mostrarMensaje('Ingrese cantidad y precio válidos', 'error'); return; }
+  const provId = Number(provSel.value);
+  const provNombre = provSel.options[provSel.selectedIndex]?.dataset?.nombre || provSel.options[provSel.selectedIndex]?.text || '';
+  const insumoId = Number(insumoSel.value);
+  const insumoNombre = insumoSel.options[insumoSel.selectedIndex]?.dataset?.nombre || insumoSel.options[insumoSel.selectedIndex]?.text || '';
+  try {
+    await api('POST', '/api/compras', { fecha, proveedor_id: provId, proveedor_nombre: provNombre, insumo_id: insumoId, insumo_nombre: insumoNombre, cantidad, unidad: 'kg', precio_unitario: precio, estado });
+    mostrarMensaje('Compra registrada');
+    $('compra-cantidad').value = '';
+    $('compra-precio').value = '';
+    if ($('compra-estado')) $('compra-estado').value = 'pendiente';
+    actualizarTablaCompras();
+  } catch {}
+}
+
+async function actualizarEstadoCompra(id, estado) {
+  try {
+    await api('PUT', '/api/compras/' + id, { estado });
+    mostrarMensaje('Estado actualizado');
+    actualizarTablaCompras();
+  } catch {}
+}
+
+async function eliminarCompra(id) {
+  if (!confirm('¿Eliminar esta compra?')) return;
+  try {
+    await api('DELETE', '/api/compras/' + id);
+    mostrarMensaje('Compra eliminada');
+    actualizarTablaCompras();
+  } catch {}
+}
+
+async function actualizarTablaCompras() {
+  try {
+    const lista = await api('GET', '/api/compras?estado=') || [];
+    const tbody = $('tabla-compras');
+    if (!tbody) return;
+    tbody.innerHTML = lista.map(c => `<tr>
+      <td>${c.fecha}</td>
+      <td>${escapeHTML(c.proveedor_nombre || '')}</td>
+      <td>${escapeHTML(c.insumo_nombre || '')}</td>
+      <td>${numero(c.cantidad).toFixed(2)} ${escapeHTML(c.unidad || 'kg')}</td>
+      <td>S/ ${numero(c.precio_unitario).toFixed(2)}</td>
+      <td>S/ ${(numero(c.cantidad) * numero(c.precio_unitario)).toFixed(2)}</td>
+      <td><span class="estado-stock ${c.estado === 'recibido' ? 'estado-correcto' : 'estado-advertencia'}">${escapeHTML(c.estado || 'pendiente')}</span></td>
+      <td class="table-actions">
+        ${c.estado !== 'recibido' ? `<button class="btn btn-primary" onclick="actualizarEstadoCompra(${c.id},'recibido')">Recibir</button>` : ''}
+        <button class="btn btn-danger" onclick="eliminarCompra(${c.id})">Eliminar</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="8">Sin compras</td></tr>';
+  } catch {}
+}
+
+// ==================== EMPLEADOS (CRUD dinámico) ====================
+async function cargarEmpleados() {
+  try { return await api('GET', '/api/empleados') || []; } catch { return []; }
+}
+
+async function guardarEmpleado() {
+  const id = $('empleado-id')?.value;
+  const data = {
+    nombre: ($('empleado-nombre')?.value || '').trim(),
+    telefono: ($('empleado-telefono')?.value || '').trim(),
+    direccion: ($('empleado-direccion')?.value || '').trim(),
+    cargo: ($('empleado-cargo')?.value || '').trim(),
+    salario: numero($('empleado-salario')?.value),
+    fecha_ingreso: $('empleado-fecha')?.value || ''
+  };
+  if (!data.nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', '/api/empleados/' + id, data);
+      mostrarMensaje('Empleado actualizado');
+    } else {
+      await api('POST', '/api/empleados', data);
+      mostrarMensaje('Empleado creado');
+    }
+    limpiarFormEmpleado();
+    actualizarTablaEmpleados();
+  } catch {}
+}
+
+async function eliminarEmpleado(id) {
+  if (!confirm('¿Eliminar este empleado?')) return;
+  try {
+    await api('DELETE', '/api/empleados/' + id);
+    mostrarMensaje('Empleado eliminado');
+    actualizarTablaEmpleados();
+  } catch {}
+}
+
+function editarEmpleado(e) {
+  if ($('empleado-id')) $('empleado-id').value = e.id;
+  if ($('empleado-nombre')) $('empleado-nombre').value = e.nombre || '';
+  if ($('empleado-telefono')) $('empleado-telefono').value = e.telefono || '';
+  if ($('empleado-direccion')) $('empleado-direccion').value = e.direccion || '';
+  if ($('empleado-cargo')) $('empleado-cargo').value = e.cargo || '';
+  if ($('empleado-salario')) $('empleado-salario').value = e.salario || '';
+  if ($('empleado-fecha')) $('empleado-fecha').value = e.fecha_ingreso || '';
+}
+
+function limpiarFormEmpleado() {
+  ['empleado-id','empleado-nombre','empleado-telefono','empleado-direccion','empleado-cargo','empleado-salario','empleado-fecha'].forEach(id => {
+    if ($(id)) $(id).value = '';
+  });
+}
+
+async function actualizarTablaEmpleados() {
+  const lista = await cargarEmpleados();
+  const tbody = $('tabla-empleados');
+  if (!tbody) return;
+  tbody.innerHTML = lista.map(e => `<tr>
+    <td>${escapeHTML(e.nombre)}</td>
+    <td>${escapeHTML(e.telefono || '')}</td>
+    <td>${escapeHTML(e.direccion || '')}</td>
+    <td>${escapeHTML(e.cargo || '')}</td>
+    <td>S/ ${numero(e.salario).toFixed(2)}</td>
+    <td>${e.fecha_ingreso || ''}</td>
+    <td class="table-actions">
+      <button class="btn btn-secondary" onclick='editarEmpleado(${JSON.stringify(e).replace(/'/g, "&#39;")})'>Editar</button>
+      <button class="btn btn-danger" onclick="eliminarEmpleado(${e.id})">Eliminar</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7">Sin empleados</td></tr>';
+}
+
+// ==================== REPORTES ====================
+async function actualizarReportes() {
+  try {
+    const gral = await api('GET', '/api/reportes/resumen-general');
+    if (gral) {
+      if ($('rep-total-gallinas')) $('rep-total-gallinas').textContent = (gral.total_gallinas || 0).toLocaleString();
+      if ($('rep-produccion-total')) $('rep-produccion-total').textContent = formatoJabas(gral.produccion_total || 0) + ' jabas';
+      if ($('rep-ventas-total')) $('rep-ventas-total').textContent = 'S/ ' + (gral.ventas_total || 0).toFixed(2);
+      if ($('rep-stock-huevos')) $('rep-stock-huevos').textContent = formatoJabas(gral.stock_huevos || 0) + ' jabas';
+      if ($('rep-stock-alimento')) $('rep-stock-alimento').textContent = (gral.stock_alimento_sacos || 0).toFixed(0) + ' sacos';
+    }
+  } catch {}
+
+  // Producción resumen (chart)
+  try {
+    const desde = $('rep-prod-desde')?.value || '';
+    const hasta = $('rep-prod-hasta')?.value || '';
+    const params = new URLSearchParams();
+    if (desde) params.set('desde', desde);
+    if (hasta) params.set('hasta', hasta);
+    const prodData = await api('GET', '/api/reportes/produccion-resumen?' + params.toString()) || [];
+    const tbody = $('tabla-reporte-produccion');
+    const chartDiv = $('chart-produccion');
+    if (tbody) {
+      tbody.innerHTML = prodData.map(p => `<tr>
+        <td>${p.fecha}</td>
+        <td>${formatoJabas(p.total_jabas)}</td>
+        <td>${formatoJabas(p.primera)}</td>
+        <td>${formatoJabas(p.segunda)}</td>
+        <td>${p.muertas || 0}</td>
+      </tr>`).join('') || '<tr><td colspan="5">Sin datos</td></tr>';
+    }
+    if (chartDiv) {
+      const maxJabas = Math.max(...prodData.map(p => numero(p.total_jabas)), 1);
+      chartDiv.innerHTML = prodData.map(p => {
+        const h = (numero(p.total_jabas) / maxJabas) * 100;
+        return `<div style="display:flex;align-items:center;margin-bottom:4px;">
+          <span style="width:80px;font-size:0.8rem;">${escapeHTML(p.fecha || '')}</span>
+          <div style="flex:1;background:#e9ecef;border-radius:4px;height:20px;overflow:hidden;">
+            <div style="height:100%;width:${h.toFixed(0)}%;background:#008080;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:white;font-size:0.75rem;font-weight:700;min-width:${h > 5 ? '0' : '100%'};">
+              ${h > 5 ? formatoJabas(p.total_jabas) : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('') || '<p>Sin datos para el gráfico</p>';
+    }
+  } catch {}
+
+  // Ventas resumen
+  try {
+    const desde = $('rep-ventas-desde')?.value || '';
+    const hasta = $('rep-ventas-hasta')?.value || '';
+    const params = new URLSearchParams();
+    if (desde) params.set('desde', desde);
+    if (hasta) params.set('hasta', hasta);
+    const ventasData = await api('GET', '/api/reportes/ventas-resumen?' + params.toString()) || [];
+    const tbody = $('tabla-reporte-ventas');
+    const chartDiv = $('chart-ventas');
+    if (tbody) {
+      tbody.innerHTML = ventasData.map(v => `<tr>
+        <td>${v.fecha}</td>
+        <td>${formatoJabas(v.total_jabas)}</td>
+        <td>${v.total_ventas !== undefined ? 'S/ ' + Number(v.total_ventas).toFixed(2) : '-'}</td>
+      </tr>`).join('') || '<tr><td colspan="3">Sin datos</td></tr>';
+    }
+    if (chartDiv) {
+      const maxVentas = Math.max(...ventasData.map(v => numero(v.total_ventas)), 1);
+      chartDiv.innerHTML = ventasData.map(v => {
+        const h = (numero(v.total_ventas) / maxVentas) * 100;
+        return `<div style="display:flex;align-items:center;margin-bottom:4px;">
+          <span style="width:80px;font-size:0.8rem;">${escapeHTML(v.fecha || '')}</span>
+          <div style="flex:1;background:#e9ecef;border-radius:4px;height:20px;overflow:hidden;">
+            <div style="height:100%;width:${h.toFixed(0)}%;background:#ff8c00;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:white;font-size:0.75rem;font-weight:700;">
+              ${h > 5 ? 'S/ ' + Number(v.total_ventas).toFixed(0) : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('') || '<p>Sin datos</p>';
+    }
+  } catch {}
+
+  // Rendimiento
+  const rendGalpon = $('rendimiento-galpon')?.value;
+  try {
+    const params = new URLSearchParams();
+    if (rendGalpon) params.set('galpon_id', rendGalpon);
+    const rendData = await api('GET', '/api/reportes/rendimiento?' + params.toString()) || [];
+    const tbody = $('tabla-rendimiento-galpon');
+    if (tbody) {
+      tbody.innerHTML = rendData.map(r => `<tr>
+        <td>${r.fecha}</td>
+        <td>${escapeHTML(r.galpon_nombre || nombreGalponPorId(r.galpon_id))}</td>
+        <td>${formatoJabas(r.jabas || 0)} jabas</td>
+        <td>${r.gallinas || 0}</td>
+        <td>${r.rendimiento !== undefined ? Number(r.rendimiento).toFixed(2) : ((r.gallinas > 0 ? (numero(r.jabas) * 360) / r.gallinas : 0).toFixed(2))}</td>
+      </tr>`).join('') || '<tr><td colspan="5">Sin datos</td></tr>';
+    }
+  } catch {}
+}
+
+// ==================== ALERTAS ====================
+async function generarAlertas() {
+  try {
+    const alertas = await api('GET', '/api/alertas/generar');
+    const cont = $('alertas-generadas');
+    if (!cont) return;
+    if (!alertas || alertas.length === 0) {
+      cont.innerHTML = '<div class="alert ok">Sin alertas generadas</div>';
+    } else {
+      cont.innerHTML = alertas.map(a =>
+        `<div class="alert danger">${escapeHTML(a.mensaje || a.titulo || '')}</div>`
+      ).join('');
+    }
+  } catch {}
+}
+
+async function actualizarNotificaciones() {
+  try {
+    const notis = await api('GET', '/api/alertas/notificaciones') || [];
+    const cont = $('tabla-notificaciones');
+    if (!cont) return;
+    cont.innerHTML = notis.map(n => `<tr class="${n.leida ? '' : 'no-leida'}">
+      <td>${n.fecha || ''}</td>
+      <td>${escapeHTML(n.mensaje || n.titulo || '')}</td>
+      <td>${n.leida ? 'Leída' : '<button class="btn btn-secondary" onclick="marcarLeida(' + n.id + ')">Marcar leída</button>'}</td>
+    </tr>`).join('') || '<tr><td colspan="3">Sin notificaciones</td></tr>';
+  } catch {}
+}
+
+async function marcarLeida(id) {
+  try {
+    await api('PUT', '/api/alertas/notificaciones/' + id + '/leer');
+    mostrarMensaje('Notificación marcada como leída');
+    actualizarNotificaciones();
+  } catch {}
+}
+
+// ==================== ADMIN: GALPONES ====================
+async function agregarGalpon() {
+  const nombre = ($('admin-galpon-nombre')?.value || '').trim();
+  const gallinas = numero($('admin-galpon-gallinas')?.value);
+  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  try {
+    await api('POST', '/api/galpones', { nombre, gallinas });
+    mostrarMensaje('Galpón agregado');
+    $('admin-galpon-nombre').value = '';
+    $('admin-galpon-gallinas').value = '';
+    await cargarGalpones();
+    poblarSelectores();
     actualizarTablaGalpones();
+  } catch {}
 }
 
-function actualizarDashboard() {
-    const fechaHoy = hoy();
-
-    const produccionHoy = datos.produccion
-        .filter(p => p.fecha === fechaHoy)
-        .reduce((suma, p) => suma + p.jabas, 0);
-
-    const ventasHoy = datos.ventas
-        .filter(v => v.fecha === fechaHoy)
-        .reduce((suma, v) => suma + numero(v.total ?? v.montoTotal), 0);
-
-    const stockBalanceado = Object.values(datos.alimentoPorGalpon)
-        .reduce((suma, v) => suma + v, 0);
-
-    document.getElementById("dash-produccion-hoy").textContent = produccionHoy + " jabas";
-    sincronizarStockJabas();
-    document.getElementById("dash-stock-jabas").textContent = datos.stockJabas + " jabas";
-    document.getElementById("dash-ventas-hoy").textContent = "S/ " + ventasHoy.toFixed(2);
-    document.getElementById("dash-stock-alimento").textContent = sacosBalanceado(stockBalanceado).toFixed(0) + " sacos";
-    document.getElementById("almacen-stock-jabas").textContent = datos.stockJabas + " jabas";
-    const elPrimera = document.getElementById("almacen-stock-primera");
-    const elSegunda = document.getElementById("almacen-stock-segunda");
-    if (elPrimera) elPrimera.textContent = datos.stockHuevos.primera + " jabas";
-    if (elSegunda) elSegunda.textContent = datos.stockHuevos.segunda + " jabas";
-
-    const alertas = [];
-
-    if (datos.stockJabas < STOCK_MINIMO_JABAS) {
-        alertas.push("Stock bajo de jabas de huevo.");
-    }
-
-    Object.keys(datos.insumos).forEach(insumo => {
-        const minimo = stockMinimoInsumoKg(insumo);
-        if (datos.insumos[insumo] < minimo) {
-            alertas.push("Stock mínimo de insumo: " + insumo);
-        } else if (datos.insumos[insumo] < minimo * 2) {
-            alertas.push("Producto próximo a agotarse: " + insumo);
-        }
-    });
-
-    Object.keys(datos.alimentoPorGalpon).forEach(galpon => {
-        const sacos = sacosBalanceado(numero(datos.alimentoPorGalpon[galpon]));
-        if (sacos < STOCK_MINIMO_ALIMENTO_SACOS) {
-            alertas.push("Alimento por debajo del mínimo en " + galpon + ": " + sacos.toFixed(2) + " sacos.");
-        }
-    });
-
-    obtenerGalpones().forEach(galpon => {
-        if (!galponTieneFormula(galpon)) {
-            alertas.push("Falta registrar fórmula de alimentación para " + galpon + ".");
-        }
-    });
-
-    const contenedor = document.getElementById("dashboard-alertas");
-    if (alertas.length === 0) {
-        contenedor.innerHTML = `<div class="alert ok">Sin alertas por el momento.</div>`;
-    } else {
-        contenedor.innerHTML = alertas.map(a => `<div class="alert danger">${a}</div>`).join("");
-    }
+async function cargarGalponParaEditar() {
+  const sel = $('admin-galpon-editar-select');
+  if (!sel) return;
+  const id = Number(sel.value);
+  const g = galponesCache.find(x => x.id === id);
+  if ($('admin-galpon-editar-nombre')) $('admin-galpon-editar-nombre').value = g ? g.nombre : '';
+  if ($('admin-galpon-editar-gallinas')) $('admin-galpon-editar-gallinas').value = g ? g.gallinas : '';
 }
 
-
-function eliminarProduccion(idProduccion) {
-    const produccion = datos.produccion.find(p => p.id === idProduccion);
-
-    if (!produccion) {
-        mostrarMensaje("No se encontró la producción.", "error");
-        return;
-    }
-
-    const confirmar = confirm("¿Seguro que deseas eliminar esta producción? Se quitará del almacén y se corregirán las gallinas.");
-    if (!confirmar) return;
-
-    const lotesProduccion = datos.lotesHuevos.filter(l => l.produccionId === idProduccion);
-    const yaVendido = lotesProduccion.some(l => numero(l.cantidadDisponible) < numero(l.cantidadInicial));
-
-    if (yaVendido) {
-        mostrarMensaje("No se puede eliminar esta producción porque parte de sus jabas ya fueron vendidas.", "error");
-        return;
-    }
-
-    datos.stockHuevos.primera = Math.max(0, numero(datos.stockHuevos.primera) - numero(produccion.primera));
-    datos.stockHuevos.segunda = Math.max(0, numero(datos.stockHuevos.segunda) - numero(produccion.segunda));
-    sincronizarStockJabas();
-
-    datos.lotesHuevos = datos.lotesHuevos.filter(l => l.produccionId !== idProduccion);
-    datos.movimientosHuevos = datos.movimientosHuevos.filter(m => m.produccionId !== idProduccion);
-    datos.produccion = datos.produccion.filter(p => p.id !== idProduccion);
-
-    if (datos.gallinas[produccion.galpon] !== undefined) {
-        datos.gallinas[produccion.galpon] += numero(produccion.muertas);
-    }
-
-    guardarDatos();
-    actualizarTodo();
-    mostrarMensaje("Producción eliminada correctamente. El almacén y las gallinas fueron corregidos.");
+async function guardarCambiosGalpon() {
+  const sel = $('admin-galpon-editar-select');
+  if (!sel) return;
+  const id = Number(sel.value);
+  const nombre = ($('admin-galpon-editar-nombre')?.value || '').trim();
+  const gallinas = numero($('admin-galpon-editar-gallinas')?.value);
+  if (!id) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
+  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  try {
+    await api('PUT', '/api/galpones/' + id, { nombre, gallinas });
+    mostrarMensaje('Galpón actualizado');
+    await cargarGalpones();
+    poblarSelectores();
+    actualizarTablaGalpones();
+  } catch {}
 }
 
-function actualizarTablaProduccion() {
-    const fechaFiltro = document.getElementById("filtro-prod-fecha").value;
-    const galponFiltro = document.getElementById("filtro-prod-galpon").value;
-
-    let lista = datos.produccion;
-
-    if (fechaFiltro) {
-        lista = lista.filter(p => p.fecha === fechaFiltro);
-    }
-
-    if (galponFiltro) {
-        lista = lista.filter(p => p.galpon === galponFiltro);
-    }
-
-    document.getElementById("tabla-produccion").innerHTML = lista.map(p => `
-        <tr>
-            <td>${p.fecha}</td>
-            <td>${p.galpon}</td>
-            <td>${numero(p.primera)}</td>
-            <td>${numero(p.segunda)}</td>
-            <td>${numero(p.jabas)}</td>
-            <td>${p.muertas}</td>
-            <td>${p.gallinasRestantes}</td>
-            <td><button class="btn btn-danger" onclick="eliminarProduccion(${p.id})">Eliminar</button></td>
-        </tr>
-    `).join("");
-}
-
-function actualizarTablaAlmacenHuevos() {
-    document.getElementById("tabla-almacen-huevos").innerHTML = datos.movimientosHuevos.map(m => {
-        const primera = numero(m.primera ?? (normalizarClaseHuevos(m.clase) === "primera" ? m.cantidad : 0));
-        const segunda = numero(m.segunda ?? (normalizarClaseHuevos(m.clase) === "segunda" ? m.cantidad : 0));
-        const total = numero(m.total ?? (primera + segunda));
-
-        return `
-            <tr>
-                <td>${m.fecha}</td>
-                <td>${m.tipo}</td>
-                <td>${m.detalle}</td>
-                <td>${primera}</td>
-                <td>${segunda}</td>
-                <td>${total}</td>
-            </tr>
-        `;
-    }).join("");
-}
-
-function actualizarAlimento() {
-    let totalInsumos = 0;
-    let totalBalanceado = 0;
-
-    document.getElementById("tabla-insumos").innerHTML = Object.keys(datos.insumos).map(insumo => {
-        const kg = numero(datos.insumos[insumo]);
-        const info = INSUMOS_INFO[insumo];
-        totalInsumos += kg;
-        return `
-            <tr>
-                <td>${insumo}</td>
-                <td>${info ? info.unidadCompra : "kg"}</td>
-                <td>${formatoStockInsumo(insumo, kg)}</td>
-                <td>${kg.toFixed(2)} kg</td>
-                <td>${stockMinimoInsumoKg(insumo).toFixed(2)} kg</td>
-            </tr>
-        `;
-    }).join("");
-
-    document.getElementById("tabla-balanceado").innerHTML = obtenerGalpones().map(galpon => {
-        const kg = numero(datos.alimentoPorGalpon[galpon]);
-        totalBalanceado += kg;
-        return `
-            <tr>
-                <td>${galpon}</td>
-                <td>${sacosBalanceado(kg).toFixed(2)} sacos</td>
-                <td>${kg.toFixed(2)} kg</td>
-                <td>${sacosBalanceado(kg) < STOCK_MINIMO_ALIMENTO_SACOS ? "⚠ Bajo mínimo" : "Correcto"}</td>
-            </tr>
-        `;
-    }).join("");
-
-    document.getElementById("stock-insumos-total").textContent = totalInsumos.toFixed(0) + " kg";
-    document.getElementById("stock-balanceado-total").textContent = sacosBalanceado(totalBalanceado).toFixed(0) + " sacos";
-
-    document.getElementById("tabla-alimento-mov").innerHTML = datos.movimientosAlimento.map(m => `
-        <tr>
-            <td>${m.fecha}</td>
-            <td>${m.tipo}</td>
-            <td>${m.detalle}</td>
-            <td>${m.cantidad}</td>
-        </tr>
-    `).join("");
-}
-
-function actualizarTablaMolino() {
-    document.getElementById("tabla-molino").innerHTML = datos.molino.map(m => `
-        <tr>
-            <td>${m.fecha}</td>
-            <td>${m.destino || m.galpon || m.formula}</td>
-            <td>${m.tandas || 1}</td>
-            <td>${m.sacos || sacosBalanceado(numero(m.kg)).toFixed(0)} sacos</td>
-            <td>${numero(m.kg).toFixed(2)} kg</td>
-            <td>${m.insumos}</td>
-        </tr>
-    `).join("");
-}
-
-function actualizarTablaVentas() {
-    actualizarStockVentas();
-
-    document.getElementById("tabla-ventas").innerHTML = datos.ventas.map(v => {
-        const primera = numero(v.primera);
-        const segunda = numero(v.segunda);
-        const totalJabas = numero(v.totalJabas || v.jabas || (primera + segunda));
-        const promedio = numero(v.promedioKgJaba);
-        const peso = numero(v.peso);
-        const precio = numero(v.precio);
-        const total = numero(v.total ?? v.montoTotal);
-
-        return `
-            <tr>
-                <td>${v.fecha}</td>
-                <td>${v.cliente}</td>
-                <td>${primera}</td>
-                <td>${segunda}</td>
-                <td>${totalJabas}</td>
-                <td>${promedio.toFixed(2)} kg</td>
-                <td>${peso.toFixed(2)} kg</td>
-                <td>S/ ${precio.toFixed(2)}</td>
-                <td>S/ ${total.toFixed(2)}</td>
-                <td><button class="btn btn-danger" onclick="eliminarVenta(${v.id})">Eliminar</button></td>
-            </tr>
-        `;
-    }).join("");
-}
-
-function cerrarDiaActual() {
-    const fecha = hoy();
-
-    if (!datos.diasCerrados.includes(fecha)) {
-        datos.diasCerrados.push(fecha);
-        guardarDatos();
-        actualizarDiasCerrados();
-        mostrarMensaje("Día cerrado correctamente. Ya no se permiten registros con esa fecha.");
-    } else {
-        mostrarMensaje("El día actual ya estaba cerrado.", "error");
-    }
-}
-
-function actualizarDiasCerrados() {
-    const texto = datos.diasCerrados.length === 0
-        ? "No hay días cerrados."
-        : "Días cerrados: " + datos.diasCerrados.join(", ");
-
-    document.getElementById("dias-cerrados").textContent = texto;
-}
-
-
-// -------------------- ADMINISTRADOR: GALPONES --------------------
-function agregarGalpon() {
-    const nombre = document.getElementById("admin-galpon-nombre").value.trim();
-    const gallinas = numero(document.getElementById("admin-galpon-gallinas").value);
-
-    if (!nombre) {
-        mostrarMensaje("Ingrese el nombre del galpón.", "error");
-        return;
-    }
-
-    if (datos.gallinas[nombre] !== undefined) {
-        mostrarMensaje("Ese galpón ya existe. Use la opción editar.", "error");
-        return;
-    }
-
-    if (gallinas < 0) {
-        mostrarMensaje("La cantidad de gallinas no puede ser negativa.", "error");
-        return;
-    }
-
-    datos.gallinas[nombre] = gallinas;
-    if (datos.alimentoPorGalpon[nombre] === undefined) datos.alimentoPorGalpon[nombre] = 0;
-
-    guardarDatos();
-    document.getElementById("admin-galpon-nombre").value = "";
-    document.getElementById("admin-galpon-gallinas").value = "";
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    mostrarMensaje("Galpón agregado correctamente.");
-}
-
-function cargarGalponParaEditar() {
-    const galpon = document.getElementById("admin-galpon-editar-select").value;
-    document.getElementById("admin-galpon-editar-nombre").value = galpon || "";
-    document.getElementById("admin-galpon-editar-gallinas").value = datos.gallinas[galpon] ?? 0;
-}
-
-function guardarCambiosGalpon() {
-    const galponActual = document.getElementById("admin-galpon-editar-select").value;
-    const nuevoNombre = document.getElementById("admin-galpon-editar-nombre").value.trim();
-    const gallinas = numero(document.getElementById("admin-galpon-editar-gallinas").value);
-
-    if (!galponActual || datos.gallinas[galponActual] === undefined) {
-        mostrarMensaje("Seleccione un galpón para editar.", "error");
-        return;
-    }
-
-    if (!nuevoNombre) {
-        mostrarMensaje("Ingrese el nuevo nombre del galpón.", "error");
-        return;
-    }
-
-    if (gallinas < 0) {
-        mostrarMensaje("La cantidad de gallinas no puede ser negativa.", "error");
-        return;
-    }
-
-    if (nuevoNombre !== galponActual && datos.gallinas[nuevoNombre] !== undefined) {
-        mostrarMensaje("Ya existe otro galpón con ese nombre.", "error");
-        return;
-    }
-
-    delete datos.gallinas[galponActual];
-    datos.gallinas[nuevoNombre] = gallinas;
-
-    // Actualiza registros relacionados para mantener consistencia visual.
-    datos.produccion.forEach(p => {
-        if (p.galpon === galponActual) p.galpon = nuevoNombre;
-    });
-
-    datos.lotesHuevos.forEach(lote => {
-        if (lote.galpon === galponActual) lote.galpon = nuevoNombre;
-    });
-
-    datos.molino.forEach(m => {
-        if (m.destino === galponActual) m.destino = nuevoNombre;
-    });
-
-    datos.movimientosHuevos.forEach(m => {
-        if (m.detalle && m.detalle.includes(galponActual)) {
-            m.detalle = m.detalle.replace(galponActual, nuevoNombre);
-        }
-    });
-
-    if (datos.alimentoPorGalpon[galponActual] !== undefined) {
-        datos.alimentoPorGalpon[nuevoNombre] = datos.alimentoPorGalpon[galponActual];
-        delete datos.alimentoPorGalpon[galponActual];
-    }
-
-    Object.keys(FORMULAS_MOLINO).forEach(nombreFormula => {
-        if (FORMULAS_MOLINO[nombreFormula].destino === galponActual) {
-            FORMULAS_MOLINO[nombreFormula].destino = nuevoNombre;
-        }
-    });
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    guardarDatos();
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    cargarGalponParaEditar();
-    mostrarMensaje("Galpón actualizado correctamente.");
-}
-
-function eliminarGalpon() {
-    const galpon = document.getElementById("admin-galpon-eliminar").value;
-
-    if (!galpon || datos.gallinas[galpon] === undefined) {
-        mostrarMensaje("Seleccione un galpón para eliminar.", "error");
-        return;
-    }
-
-    if (!confirm("¿Desea eliminar " + galpon + "? Los registros históricos no se borrarán.")) {
-        return;
-    }
-
-    delete datos.gallinas[galpon];
-
-    // Retira el stock de alimento y las fórmulas asociadas al galpón eliminado.
-    delete datos.alimentoPorGalpon[galpon];
-    Object.keys(FORMULAS_MOLINO).forEach(nombreFormula => {
-        if (FORMULAS_MOLINO[nombreFormula].destino === galpon) {
-            delete FORMULAS_MOLINO[nombreFormula];
-        }
-    });
-    datos.formulasMolino = FORMULAS_MOLINO;
-
-    guardarDatos();
-    cargarOpcionesInsumosYFormulas();
-    actualizarTodo();
-    mostrarMensaje("Galpón eliminado del listado activo.");
+async function eliminarGalponAdmin() {
+  const sel = $('admin-galpon-eliminar');
+  if (!sel) return;
+  const id = Number(sel.value);
+  if (!id) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
+  if (!confirm('¿Eliminar este galpón?')) return;
+  try {
+    await api('DELETE', '/api/galpones/' + id);
+    mostrarMensaje('Galpón eliminado');
+    await cargarGalpones();
+    poblarSelectores();
+    actualizarTablaGalpones();
+  } catch {}
 }
 
 function actualizarTablaGalpones() {
-    const cuerpo = document.getElementById("tabla-galpones");
-    if (!cuerpo) return;
-
-    cuerpo.innerHTML = obtenerGalpones().map(galpon => `
-        <tr>
-            <td>${galpon}</td>
-            <td>${datos.gallinas[galpon]}</td>
-            <td>${galponTieneFormula(galpon) ? "Sí" : "No registrada"}</td>
-        </tr>
-    `).join("");
+  const tbody = $('tabla-galpones');
+  if (!tbody) return;
+  tbody.innerHTML = galponesCache.map(g => `<tr>
+    <td>${escapeHTML(g.nombre)}</td>
+    <td>${g.gallinas || 0}</td>
+    <td>${g.alimento_kg ? (g.alimento_kg / 50).toFixed(0) + ' sacos' : '0 sacos'}</td>
+  </tr>`).join('') || '<tr><td colspan="3">Sin galpones</td></tr>';
 }
 
-// -------------------- ACCESIBILIDAD --------------------
+// ==================== ADMIN: INSUMOS ====================
+function obtenerInfoPorPresentacion(tipo) {
+  const map = {
+    toneladas: { unidad_compra: 'toneladas', kg_por_unidad: 1000, etiqueta: 'Granel' },
+    sacos50: { unidad_compra: 'sacos de 50 kg', kg_por_unidad: 50, etiqueta: 'Saco 50 kg' },
+    tanques1000: { unidad_compra: 'tanques de 1000 L', kg_por_unidad: 1000, etiqueta: 'Litros' },
+    sacos25: { unidad_compra: 'sacos de 25 kg', kg_por_unidad: 25, etiqueta: 'Saco 25 kg' },
+    kg: { unidad_compra: 'kg', kg_por_unidad: 1, etiqueta: 'Kg' }
+  };
+  return map[tipo] || map.kg;
+}
+
+async function agregarNuevoInsumo() {
+  const nombre = ($('nuevo-insumo-nombre')?.value || '').trim().toUpperCase();
+  const presentacion = $('nuevo-insumo-presentacion')?.value || 'kg';
+  const cantidad = numero($('nuevo-insumo-stock')?.value);
+  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  const info = obtenerInfoPorPresentacion(presentacion);
+  try {
+    await api('POST', '/api/insumos', {
+      nombre,
+      cantidad_kg: cantidad * info.kg_por_unidad,
+      unidad_compra: info.unidad_compra,
+      kg_por_unidad: info.kg_por_unidad,
+      etiqueta: info.etiqueta,
+      stock_minimo_kg: info.kg_por_unidad
+    });
+    mostrarMensaje('Insumo creado');
+    $('nuevo-insumo-nombre').value = '';
+    $('nuevo-insumo-stock').value = '0';
+    poblarSelectores();
+    actualizarInsumos();
+  } catch {}
+}
+
+async function eliminarInsumoAdmin() {
+  const sel = $('admin-insumo-eliminar');
+  if (!sel) return;
+  const id = Number(sel.value);
+  if (!id) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
+  if (!confirm('¿Eliminar este insumo?')) return;
+  try {
+    await api('DELETE', '/api/insumos/' + id);
+    mostrarMensaje('Insumo eliminado');
+    poblarSelectores();
+    actualizarInsumos();
+  } catch {}
+}
+
+// ==================== ADMIN: FÓRMULAS ====================
+async function cargarEditorFormula() {
+  const sel = $('edit-formula');
+  const preview = $('editor-formula-preview');
+  if (!sel) return;
+  const id = Number(sel.value);
+  if (!id) {
+    if (preview) preview.innerHTML = '<p>Seleccione una fórmula</p>';
+    return;
+  }
+  try {
+    const formulas = await cargarFormulasMolino();
+    const f = formulas.find(x => x.id === id);
+    if (!f) {
+      if (preview) preview.innerHTML = '<p>Fórmula no encontrada</p>';
+      return;
+    }
+    const insumos = f.insumos || [];
+    if (preview) {
+      preview.innerHTML = insumos.length
+        ? insumos.map(i => `<div class="formula-item">
+            <strong>${escapeHTML(i.insumo_nombre || '')}</strong>
+            <span>${numero(i.kg_por_tanda).toFixed(2)} kg por tanda</span>
+          </div>`).join('')
+        : '<p>Esta fórmula no tiene insumos</p>';
+    }
+  } catch {}
+}
+
+async function crearFormula() {
+  const nombre = ($('nueva-formula-nombre')?.value || '').trim();
+  const galponId = Number($('molino-galpon')?.value);
+  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
+  if (!galponId) { mostrarMensaje('Seleccione un galpón destino', 'error'); return; }
+  try {
+    await api('POST', '/api/molino/formulas', { nombre, galpon_id: galponId });
+    mostrarMensaje('Fórmula creada');
+    $('nueva-formula-nombre').value = '';
+    poblarSelectores();
+  } catch {}
+}
+
+async function eliminarFormulaAdmin() {
+  const sel = $('edit-formula');
+  if (!sel) return;
+  const id = Number(sel.value);
+  if (!id) { mostrarMensaje('Seleccione una fórmula', 'error'); return; }
+  if (!confirm('¿Eliminar esta fórmula?')) return;
+  try {
+    await api('DELETE', '/api/molino/formulas/' + id);
+    mostrarMensaje('Fórmula eliminada');
+    poblarSelectores();
+    if ($('editor-formula-preview')) $('editor-formula-preview').innerHTML = '';
+  } catch {}
+}
+
+async function agregarInsumoFormula() {
+  const formulaId = Number($('edit-formula')?.value);
+  const insumoId = Number($('edit-formula-insumo')?.value);
+  const kg = numero($('edit-formula-kg')?.value);
+  if (!formulaId) { mostrarMensaje('Seleccione una fórmula', 'error'); return; }
+  if (!insumoId) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
+  if (kg <= 0) { mostrarMensaje('Ingrese kg por tanda', 'error'); return; }
+  try {
+    await api('POST', '/api/molino/formulas/' + formulaId + '/insumos', { insumo_id: insumoId, kg_por_tanda: kg });
+    mostrarMensaje('Insumo agregado a la fórmula');
+    $('edit-formula-kg').value = '';
+    cargarEditorFormula();
+  } catch {}
+}
+
+async function quitarInsumoFormula() {
+  const formulaId = Number($('edit-formula')?.value);
+  const insumoId = Number($('edit-formula-insumo')?.value);
+  if (!formulaId) { mostrarMensaje('Seleccione una fórmula', 'error'); return; }
+  if (!insumoId) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
+  // We need to find the formula-insumo id. For now, let's just use insumo_id
+  try {
+    await api('DELETE', '/api/molino/formulas/' + formulaId + '/insumos/' + insumoId);
+    mostrarMensaje('Insumo quitado de la fórmula');
+    cargarEditorFormula();
+  } catch {}
+}
+
+// ==================== ACTUALIZAR TODO ====================
+async function actualizarTodo() {
+  await cargarGalpones();
+  actualizarDashboard();
+  actualizarTablaProduccion();
+  actualizarAlmacenHuevos();
+  actualizarMovimientosHuevos();
+  actualizarClasesSegunda();
+  actualizarInsumos();
+  actualizarAlimentoBalanceado();
+  actualizarMovimientosAlimento();
+  actualizarTablaMolino();
+  actualizarTablaVentas();
+  actualizarTablaGalpones();
+  // Reportes / rendimiento
+  actualizarReportes();
+  // Alertas
+  generarAlertas();
+  actualizarNotificaciones();
+  // CRUD tables
+  actualizarTablaClientes();
+  actualizarTablaProveedores();
+  actualizarTablaCompras();
+  actualizarTablaEmpleados();
+}
+
+// ==================== INYECTAR SECCIONES FALTANTES EN EL HTML ====================
+function inyectarSeccionesFaltantes() {
+  const main = document.querySelector('.content');
+  const menu = document.querySelector('.menu');
+  if (!main || !menu) return;
+
+  // Secciones que no existen en el HTML original
+  const nuevasSecciones = [
+    {
+      tab: 'clientes',
+      titulo: 'Clientes',
+      html: `
+        <h2>Clientes</h2>
+        <div class="box">
+          <h3 id="titulo-form-cliente">Nuevo cliente</h3>
+          <input type="hidden" id="cliente-id">
+          <div class="form-grid">
+            <div><label>Nombre</label><input type="text" id="cliente-nombre" placeholder="Nombre del cliente"></div>
+            <div><label>Teléfono</label><input type="text" id="cliente-telefono" placeholder="Teléfono"></div>
+            <div><label>Dirección</label><input type="text" id="cliente-direccion" placeholder="Dirección"></div>
+            <div><label>Email</label><input type="text" id="cliente-email" placeholder="Email"></div>
+            <div><label>RUC</label><input type="text" id="cliente-ruc" placeholder="RUC"></div>
+          </div>
+          <button class="btn btn-primary" id="btn-guardar-cliente" onclick="guardarCliente()">Guardar cliente</button>
+          <button class="btn btn-light" onclick="limpiarFormCliente();$('titulo-form-cliente').textContent='Nuevo cliente'">Cancelar</button>
+        </div>
+        <div class="table-box">
+          <h3>Lista de clientes</h3>
+          <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Email</th><th>RUC</th><th>Acción</th></tr></thead>
+          <tbody id="tabla-clientes"></tbody></table>
+        </div>
+      `
+    },
+    {
+      tab: 'proveedores',
+      titulo: 'Proveedores',
+      html: `
+        <h2>Proveedores</h2>
+        <div class="box">
+          <h3 id="titulo-form-proveedor">Nuevo proveedor</h3>
+          <input type="hidden" id="proveedor-id">
+          <div class="form-grid">
+            <div><label>Nombre</label><input type="text" id="proveedor-nombre" placeholder="Nombre del proveedor"></div>
+            <div><label>Teléfono</label><input type="text" id="proveedor-telefono" placeholder="Teléfono"></div>
+            <div><label>Dirección</label><input type="text" id="proveedor-direccion" placeholder="Dirección"></div>
+            <div><label>Email</label><input type="text" id="proveedor-email" placeholder="Email"></div>
+            <div><label>RUC</label><input type="text" id="proveedor-ruc" placeholder="RUC"></div>
+          </div>
+          <button class="btn btn-primary" id="btn-guardar-proveedor" onclick="guardarProveedor()">Guardar proveedor</button>
+          <button class="btn btn-light" onclick="limpiarFormProveedor();$('titulo-form-proveedor').textContent='Nuevo proveedor'">Cancelar</button>
+        </div>
+        <div class="table-box">
+          <h3>Lista de proveedores</h3>
+          <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Email</th><th>RUC</th><th>Acción</th></tr></thead>
+          <tbody id="tabla-proveedores"></tbody></table>
+        </div>
+      `
+    },
+    {
+      tab: 'compras',
+      titulo: 'Compras',
+      html: `
+        <h2>Compras</h2>
+        <div class="box">
+          <h3>Registrar compra</h3>
+          <div class="form-grid">
+            <div><label>Fecha</label><input type="date" id="compra-fecha"></div>
+            <div><label>Proveedor</label><select id="compra-proveedor"><option value="">-- Seleccione --</option></select></div>
+            <div><label>Insumo</label><select id="compra-insumo"><option value="">-- Seleccione --</option></select></div>
+            <div><label>Cantidad</label><input type="number" id="compra-cantidad" min="0" step="0.01" placeholder="kg"></div>
+            <div><label>Precio unitario</label><input type="number" id="compra-precio" min="0" step="0.01" placeholder="S/"></div>
+            <div><label>Estado</label><select id="compra-estado"><option value="pendiente">Pendiente</option><option value="recibido">Recibido</option></select></div>
+          </div>
+          <button class="btn btn-primary" id="btn-guardar-compra" onclick="guardarCompra()">Registrar compra</button>
+        </div>
+        <div class="table-box">
+          <h3>Historial de compras</h3>
+          <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Insumo</th><th>Cantidad</th><th>Precio unit.</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead>
+          <tbody id="tabla-compras"></tbody></table>
+        </div>
+      `
+    },
+    {
+      tab: 'empleados',
+      titulo: 'Empleados',
+      html: `
+        <h2>Empleados</h2>
+        <div class="box">
+          <h3 id="titulo-form-empleado">Nuevo empleado</h3>
+          <input type="hidden" id="empleado-id">
+          <div class="form-grid">
+            <div><label>Nombre</label><input type="text" id="empleado-nombre" placeholder="Nombre"></div>
+            <div><label>Teléfono</label><input type="text" id="empleado-telefono" placeholder="Teléfono"></div>
+            <div><label>Dirección</label><input type="text" id="empleado-direccion" placeholder="Dirección"></div>
+            <div><label>Cargo</label><input type="text" id="empleado-cargo" placeholder="Cargo"></div>
+            <div><label>Salario</label><input type="number" id="empleado-salario" min="0" step="0.01" placeholder="S/"></div>
+            <div><label>Fecha ingreso</label><input type="date" id="empleado-fecha"></div>
+          </div>
+          <button class="btn btn-primary" id="btn-guardar-empleado" onclick="guardarEmpleado()">Guardar empleado</button>
+          <button class="btn btn-light" onclick="limpiarFormEmpleado();$('titulo-form-empleado').textContent='Nuevo empleado'">Cancelar</button>
+        </div>
+        <div class="table-box">
+          <h3>Lista de empleados</h3>
+          <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Cargo</th><th>Salario</th><th>Fecha ingreso</th><th>Acción</th></tr></thead>
+          <tbody id="tabla-empleados"></tbody></table>
+        </div>
+      `
+    },
+    {
+      tab: 'reportes',
+      titulo: 'Reportes',
+      html: `
+        <h2>Reportes</h2>
+        <div class="cards-grid">
+          <div class="card"><span>Total gallinas</span><strong id="rep-total-gallinas">0</strong></div>
+          <div class="card"><span>Producción total</span><strong id="rep-produccion-total">0 jabas</strong></div>
+          <div class="card"><span>Ventas totales</span><strong id="rep-ventas-total">S/ 0.00</strong></div>
+          <div class="card"><span>Stock huevos</span><strong id="rep-stock-huevos">0 jabas</strong></div>
+          <div class="card"><span>Stock alimento</span><strong id="rep-stock-alimento">0 sacos</strong></div>
+        </div>
+
+        <div class="box">
+          <h3>Producción por fecha</h3>
+          <div class="form-grid">
+            <div><label>Desde</label><input type="date" id="rep-prod-desde"></div>
+            <div><label>Hasta</label><input type="date" id="rep-prod-hasta"></div>
+          </div>
+          <button class="btn btn-secondary" onclick="actualizarReportes()">Filtrar</button>
+          <h4 style="margin-top:16px;">Gráfico de producción</h4>
+          <div id="chart-produccion"></div>
+          <div class="table-box" style="margin-top:12px;">
+            <table><thead><tr><th>Fecha</th><th>Total jabas</th><th>Primera</th><th>Segunda</th><th>Muertas</th></tr></thead>
+            <tbody id="tabla-reporte-produccion"></tbody></table>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>Ventas por fecha</h3>
+          <div class="form-grid">
+            <div><label>Desde</label><input type="date" id="rep-ventas-desde"></div>
+            <div><label>Hasta</label><input type="date" id="rep-ventas-hasta"></div>
+          </div>
+          <button class="btn btn-secondary" onclick="actualizarReportes()">Filtrar</button>
+          <h4 style="margin-top:16px;">Gráfico de ventas</h4>
+          <div id="chart-ventas"></div>
+          <div class="table-box" style="margin-top:12px;">
+            <table><thead><tr><th>Fecha</th><th>Total jabas</th><th>Total ventas</th></tr></thead>
+            <tbody id="tabla-reporte-ventas"></tbody></table>
+          </div>
+        </div>
+      `
+    },
+    {
+      tab: 'alertas',
+      titulo: 'Alertas',
+      html: `
+        <h2>Alertas</h2>
+        <div class="box">
+          <h3>Alertas generadas</h3>
+          <button class="btn btn-secondary" onclick="generarAlertas()">Generar alertas</button>
+          <div id="alertas-generadas" style="margin-top:12px;"></div>
+        </div>
+        <div class="table-box">
+          <h3>Historial de notificaciones</h3>
+          <button class="btn btn-secondary" onclick="actualizarNotificaciones()">Actualizar</button>
+          <table><thead><tr><th>Fecha</th><th>Mensaje</th><th>Estado</th></tr></thead>
+          <tbody id="tabla-notificaciones"></tbody></table>
+        </div>
+      `
+    }
+  ];
+
+  // Verificar qué secciones ya existen
+  nuevasSecciones.forEach(sec => {
+    if (!document.getElementById('tab-' + sec.tab)) {
+      // Add nav button
+      const btn = document.createElement('button');
+      btn.className = 'nav-btn';
+      btn.dataset.tab = sec.tab;
+      btn.textContent = sec.titulo;
+      menu.appendChild(btn);
+
+      // Add section
+      const section = document.createElement('section');
+      section.id = 'tab-' + sec.tab;
+      section.className = 'tab-content';
+      section.innerHTML = sec.html;
+      main.appendChild(section);
+    }
+  });
+
+  // Set default dates
+  if ($('compra-fecha')) $('compra-fecha').value = hoy();
+  if ($('empleado-fecha')) $('empleado-fecha').value = hoy();
+}
+
+// ==================== EVENT LISTENERS ====================
+document.addEventListener('DOMContentLoaded', async () => {
+  // Inyectar secciones faltantes
+  inyectarSeccionesFaltantes();
+
+  // Fechas por defecto
+  if ($('prod-fecha')) $('prod-fecha').value = hoy();
+  if ($('molino-fecha')) $('molino-fecha').value = hoy();
+  if ($('venta-fecha')) $('venta-fecha').value = hoy();
+  if ($('rep-prod-desde')) $('rep-prod-desde').value = hoy();
+  if ($('rep-prod-hasta')) $('rep-prod-hasta').value = hoy();
+  if ($('rep-ventas-desde')) $('rep-ventas-desde').value = hoy();
+  if ($('rep-ventas-hasta')) $('rep-ventas-hasta').value = hoy();
+
+  // Login
+  if ($('btn-login')) $('btn-login').addEventListener('click', iniciarSesion);
+  if ($('login-pass')) $('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') iniciarSesion(); });
+  if ($('btn-logout')) $('btn-logout').addEventListener('click', cerrarSesion);
+
+  // Navegación
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
+  });
+
+  // Producción
+  if ($('btn-guardar-produccion')) $('btn-guardar-produccion').addEventListener('click', guardarProduccion);
+  if ($('btn-filtrar-produccion')) $('btn-filtrar-produccion').addEventListener('click', filtrarProduccion);
+  if ($('btn-limpiar-filtro-produccion')) $('btn-limpiar-filtro-produccion').addEventListener('click', limpiarFiltroProduccion);
+  if ($('prod-jabas-primera')) $('prod-jabas-primera').addEventListener('input', actualizarPaquetesProduccion);
+  if ($('prod-jabas-segunda')) $('prod-jabas-segunda').addEventListener('input', actualizarPaquetesProduccion);
+  actualizarPaquetesProduccion();
+
+  // Almacén huevos
+  if ($('btn-guardar-clases-segunda')) $('btn-guardar-clases-segunda').addEventListener('click', guardarClasificacionSegunda);
+
+  // Almacén insumos / alimento
+  if ($('btn-ingresar-insumo')) $('btn-ingresar-insumo').addEventListener('click', ingresarInsumo);
+  if ($('btn-agregar-insumo')) $('btn-agregar-insumo').addEventListener('click', agregarNuevoInsumo);
+  if ($('btn-eliminar-insumo')) $('btn-eliminar-insumo').addEventListener('click', eliminarInsumoAdmin);
+  if ($('btn-consumir-alimento')) $('btn-consumir-alimento').addEventListener('click', consumirAlimento);
+
+  // Ventas
+  ['venta-primera','venta-segunda','venta-promedio-kg-jaba','venta-precio-primera','venta-precio-segunda'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('input', calcularTotalVenta);
+  });
+  if ($('btn-guardar-venta')) $('btn-guardar-venta').addEventListener('click', guardarVenta);
+  calcularTotalVenta();
+
+  // Molino
+  if ($('molino-galpon')) $('molino-galpon').addEventListener('change', actualizarFormulaMolinoPorGalpon);
+  if ($('btn-ver-formula')) $('btn-ver-formula').addEventListener('click', verFormulaMolino);
+  if ($('btn-producir-molino')) $('btn-producir-molino').addEventListener('click', producirMolino);
+  if ($('btn-cerrar-dia')) $('btn-cerrar-dia').addEventListener('click', () => mostrarMensaje('Función de cierre diario no implementada en el servidor', 'error'));
+
+  // Admin: galpones
+  if ($('btn-admin-agregar-galpon')) $('btn-admin-agregar-galpon').addEventListener('click', agregarGalpon);
+  if ($('btn-admin-cargar-galpon')) $('btn-admin-cargar-galpon').addEventListener('click', cargarGalponParaEditar);
+  if ($('btn-admin-guardar-galpon')) $('btn-admin-guardar-galpon').addEventListener('click', guardarCambiosGalpon);
+  if ($('btn-admin-eliminar-galpon')) $('btn-admin-eliminar-galpon').addEventListener('click', eliminarGalponAdmin);
+  if ($('admin-galpon-editar-select')) $('admin-galpon-editar-select').addEventListener('change', cargarGalponParaEditar);
+
+  // Admin: insumos
+  if ($('btn-agregar-insumo')) $('btn-agregar-insumo').addEventListener('click', agregarNuevoInsumo);
+  if ($('btn-eliminar-insumo')) $('btn-eliminar-insumo').addEventListener('click', eliminarInsumoAdmin);
+
+  // Admin: fórmulas
+  if ($('edit-formula')) $('edit-formula').addEventListener('change', cargarEditorFormula);
+  if ($('btn-guardar-formula-destino')) $('btn-guardar-formula-destino').addEventListener('click', () => mostrarMensaje('Edite el galpón de la fórmula desde la sección de galpones', 'error'));
+  if ($('btn-agregar-formula-insumo')) $('btn-agregar-formula-insumo').addEventListener('click', agregarInsumoFormula);
+  if ($('btn-quitar-formula-insumo')) $('btn-quitar-formula-insumo').addEventListener('click', quitarInsumoFormula);
+  if ($('btn-crear-formula')) $('btn-crear-formula').addEventListener('click', crearFormula);
+  if ($('btn-eliminar-formula')) $('btn-eliminar-formula').addEventListener('click', eliminarFormulaAdmin);
+
+  // Rendimiento / Reportes
+  if ($('rendimiento-galpon')) $('rendimiento-galpon').addEventListener('change', () => actualizarReportes());
+  if ($('btn-ver-rendimiento')) $('btn-ver-rendimiento').addEventListener('click', () => actualizarReportes());
+  if ($('btn-exportar-rendimiento')) $('btn-exportar-rendimiento').addEventListener('click', () => mostrarMensaje('Exportación a Excel deshabilitada en versión API', 'error'));
+
+  // Accesibilidad
+  if ($('btn-text-small')) $('btn-text-small').addEventListener('click', () => cambiarTamanoTexto(-1));
+  if ($('btn-text-big')) $('btn-text-big').addEventListener('click', () => cambiarTamanoTexto(1));
+  if ($('btn-text-reset')) $('btn-text-reset').addEventListener('click', resetTamanoTexto);
+  cargarTamanoTexto();
+
+  // Cliente select auto-fill name in ventas
+  if ($('venta-cliente-select')) {
+    $('venta-cliente-select').addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex];
+      if ($('venta-cliente')) {
+        $('venta-cliente').value = opt && opt.value ? (opt.dataset.nombre || opt.text) : '';
+      }
+    });
+  }
+
+  // Check session from server or redirect
+  // Simple: no stored session - show login
+  if (sessionStorage.getItem('avicola_session')) {
+    try {
+      session = JSON.parse(sessionStorage.getItem('avicola_session'));
+      await cargarGalpones();
+      poblarSelectores();
+      mostrarAplicacion();
+    } catch {
+      sessionStorage.removeItem('avicola_session');
+    }
+  }
+});
+
+// Sobreescribir iniciarSesion para guardar en sessionStorage
+const _originalLogin = iniciarSesion;
+iniciarSesion = async function() {
+  const usuario = ($('login-user')?.value || '').trim();
+  const clave = ($('login-pass')?.value || '').trim();
+  if (!usuario || !clave) { mostrarMensaje('Ingrese usuario y contraseña', 'error'); return; }
+  try {
+    const res = await api('POST', '/api/auth/login', { usuario, clave });
+    if (res && res.usuario) {
+      session = res.usuario;
+      sessionStorage.setItem('avicola_session', JSON.stringify(session));
+      await cargarGalpones();
+      poblarSelectores();
+      mostrarAplicacion();
+    } else {
+      mostrarMensaje('Credenciales inválidas', 'error');
+    }
+  } catch {}
+};
+
+// Sobreescribir cerrarSesion
+const _originalLogout = cerrarSesion;
+cerrarSesion = function() {
+  session = null;
+  galponesCache = [];
+  sessionStorage.removeItem('avicola_session');
+  const login = $('login-screen');
+  const app = $('app');
+  if (login) login.classList.remove('hidden');
+  if (app) app.classList.add('hidden');
+};
+
+// ==================== ACCESIBILIDAD ====================
 function cambiarTamanoTexto(valor) {
-    const html = document.documentElement;
-    const actual = parseFloat(html.style.fontSize || "16");
-    const nuevo = Math.min(22, Math.max(14, actual + valor));
-    html.style.fontSize = nuevo + "px";
-    localStorage.setItem("tamanoTextoAvicola", nuevo);
+  const html = document.documentElement;
+  const actual = parseFloat(window.getComputedStyle(html).fontSize || '16');
+  const nuevo = Math.min(22, Math.max(14, actual + valor));
+  html.style.fontSize = nuevo + 'px';
+  try { localStorage.setItem('tamanoTextoAvicola', nuevo); } catch {}
 }
 
 function cargarTamanoTexto() {
-    const guardado = localStorage.getItem("tamanoTextoAvicola");
-    if (guardado) {
-        document.documentElement.style.fontSize = guardado + "px";
-    }
+  try {
+    const guardado = localStorage.getItem('tamanoTextoAvicola');
+    if (guardado) document.documentElement.style.fontSize = guardado + 'px';
+  } catch {}
 }
 
 function resetTamanoTexto() {
-    document.documentElement.style.fontSize = "16px";
-    localStorage.setItem("tamanoTextoAvicola", "16");
+  document.documentElement.style.fontSize = '16px';
+  try { localStorage.setItem('tamanoTextoAvicola', '16'); } catch {}
 }
-
-function cargarOpcionesInsumosYFormulas() {
-    const opcionesInsumos = Object.keys(INSUMOS_INFO).map(nombre => {
-        const info = INSUMOS_INFO[nombre];
-        return `<option value="${nombre}">${nombre} - ${info.unidadCompra}</option>`;
-    }).join("");
-
-    const selectInsumo = document.getElementById("insumo-nombre");
-    if (selectInsumo) selectInsumo.innerHTML = opcionesInsumos;
-
-    const selectEliminarInsumo = document.getElementById("admin-insumo-eliminar");
-    if (selectEliminarInsumo) selectEliminarInsumo.innerHTML = opcionesInsumos;
-
-    const selectEditorInsumo = document.getElementById("edit-formula-insumo");
-    if (selectEditorInsumo) selectEditorInsumo.innerHTML = opcionesInsumos;
-
-    const opcionesFormulas = Object.keys(FORMULAS_MOLINO).map(nombre => {
-        return `<option value="${nombre}">${nombre} → ${FORMULAS_MOLINO[nombre].destino}</option>`;
-    }).join("");
-
-    const selectMolinoGalpon = document.getElementById("molino-galpon");
-    if (selectMolinoGalpon) {
-        selectMolinoGalpon.innerHTML = opcionesGalponesHTML(false);
-        actualizarFormulaMolinoPorGalpon();
-    }
-
-    const selectEditFormula = document.getElementById("edit-formula");
-    if (selectEditFormula) selectEditFormula.innerHTML = opcionesFormulas;
-
-    // Galpones administrables: se cargan desde datos.gallinas.
-    const prodGalpon = document.getElementById("prod-galpon");
-    if (prodGalpon) prodGalpon.innerHTML = opcionesGalponesHTML(false);
-
-    const filtroGalpon = document.getElementById("filtro-prod-galpon");
-    if (filtroGalpon) filtroGalpon.innerHTML = opcionesGalponesHTML(true);
-
-    const editGalpon = document.getElementById("admin-galpon-editar-select");
-    if (editGalpon) editGalpon.innerHTML = opcionesGalponesHTML(false);
-
-    const eliminarGalponSelect = document.getElementById("admin-galpon-eliminar");
-    if (eliminarGalponSelect) eliminarGalponSelect.innerHTML = opcionesGalponesHTML(false);
-
-    const selectConsumo = document.getElementById("consumo-galpon");
-    if (selectConsumo) selectConsumo.innerHTML = opcionesGalponesHTML(false);
-
-    cargarGalponParaEditar();
-}
-
-// -------------------- INICIO DEL SISTEMA --------------------
-document.addEventListener("DOMContentLoaded", () => {
-    cargarDatos();
-    cargarTamanoTexto();
-
-    // Fechas por defecto
-    document.getElementById("prod-fecha").value = hoy();
-    document.getElementById("molino-fecha").value = hoy();
-    document.getElementById("venta-fecha").value = hoy();
-
-    cargarOpcionesInsumosYFormulas();
-
-    // Login
-    document.getElementById("btn-login").addEventListener("click", iniciarSesion);
-    document.getElementById("btn-logout").addEventListener("click", cerrarSesion);
-
-    // Navegación
-    document.querySelectorAll(".nav-btn").forEach(btn => {
-        btn.addEventListener("click", () => cambiarTab(btn.dataset.tab));
-    });
-
-    // Producción
-    document.getElementById("btn-guardar-produccion").addEventListener("click", guardarProduccion);
-    document.getElementById("btn-filtrar-produccion").addEventListener("click", filtrarProduccion);
-    document.getElementById("btn-limpiar-filtro-produccion").addEventListener("click", limpiarFiltroProduccion);
-
-    // Almacén huevos: no tiene botones manuales. Solo se actualiza desde Producción y Ventas.
-
-    // Almacén alimento
-    document.getElementById("btn-ingresar-insumo").addEventListener("click", ingresarInsumo);
-    document.getElementById("btn-agregar-insumo").addEventListener("click", agregarNuevoInsumo);
-    document.getElementById("btn-eliminar-insumo").addEventListener("click", eliminarInsumo);
-    document.getElementById("btn-consumir-alimento").addEventListener("click", consumirAlimento);
-
-    // Administrador: galpones
-    document.getElementById("btn-admin-agregar-galpon").addEventListener("click", agregarGalpon);
-    document.getElementById("btn-admin-cargar-galpon").addEventListener("click", cargarGalponParaEditar);
-    document.getElementById("btn-admin-guardar-galpon").addEventListener("click", guardarCambiosGalpon);
-    document.getElementById("btn-admin-eliminar-galpon").addEventListener("click", eliminarGalpon);
-    document.getElementById("admin-galpon-editar-select").addEventListener("change", cargarGalponParaEditar);
-
-    // Molino
-    const selectMolinoGalpon = document.getElementById("molino-galpon");
-    if (selectMolinoGalpon) {
-        selectMolinoGalpon.addEventListener("change", actualizarFormulaMolinoPorGalpon);
-        actualizarFormulaMolinoPorGalpon();
-    }
-    document.getElementById("btn-ver-formula").addEventListener("click", verFormulaMolino);
-    document.getElementById("btn-producir-molino").addEventListener("click", producirMolino);
-    document.getElementById("edit-formula").addEventListener("change", cargarEditorFormula);
-    document.getElementById("edit-formula-insumo").addEventListener("change", actualizarKgFormulaPorInsumo);
-    document.getElementById("btn-guardar-formula-destino").addEventListener("click", guardarDestinoFormula);
-    document.getElementById("btn-agregar-formula-insumo").addEventListener("click", agregarOActualizarInsumoFormula);
-    document.getElementById("btn-quitar-formula-insumo").addEventListener("click", quitarInsumoDeFormula);
-    document.getElementById("btn-crear-formula").addEventListener("click", crearFormula);
-    document.getElementById("btn-eliminar-formula").addEventListener("click", eliminarFormula);
-    cargarEditorFormula();
-
-    // Ventas
-    document.getElementById("venta-primera").addEventListener("input", calcularTotalVenta);
-    document.getElementById("venta-segunda").addEventListener("input", calcularTotalVenta);
-    document.getElementById("venta-promedio-kg-jaba").addEventListener("input", calcularTotalVenta);
-    document.getElementById("venta-precio").addEventListener("input", calcularTotalVenta);
-    document.getElementById("btn-guardar-venta").addEventListener("click", guardarVenta);
-
-    // Dashboard
-    document.getElementById("btn-cerrar-dia").addEventListener("click", cerrarDiaActual);
-
-    // Accesibilidad
-    document.getElementById("btn-text-small").addEventListener("click", () => cambiarTamanoTexto(-1));
-    document.getElementById("btn-text-big").addEventListener("click", () => cambiarTamanoTexto(1));
-    document.getElementById("btn-text-reset").addEventListener("click", resetTamanoTexto);
-
-    if (datos.usuarioActual) {
-        mostrarAplicacion();
-    }
-});
