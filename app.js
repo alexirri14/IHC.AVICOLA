@@ -328,7 +328,7 @@ async function api(path, options = {}) {
     }
 
     if (method === 'POST') {
-      const pts = { '/galpones':'galpones','/configuracion/usuarios':'usuarios' };
+      const pts = { '/galpones':'galpones','/configuracion/usuarios':'usuarios','/formulas':'formulas','/clientes':'clientes' };
       if (pts[cleanPath]) return await c.insert(pts[cleanPath], body);
 
       if (cleanPath === '/produccion') {
@@ -340,9 +340,10 @@ async function api(path, options = {}) {
         return r;
       }
       if (cleanPath === '/molino/producir') {
-        const r=await c.insert('produccion_molino',{fecha:body.fecha,formula_id:body.formula_id,tandas:body.tandas,kg_producidos:body.tandas*40,costo:body.tandas*50});
-        await c.rpc('distribuir_alimento',{p_kg:body.tandas*40});
-        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Ingreso',detalle:'Producción molino',primera:0,segunda:0});
+        const kg = body.tandas * 1500;
+        const r=await c.insert('produccion_molino',{fecha:body.fecha,formula_id:body.formula_id,tandas:body.tandas,kg_producidos:kg,costo:body.tandas * 1500 * 1.2});
+        await c.rpc('distribuir_alimento',{p_kg:kg});
+        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Ingreso',detalle:'Producción molino: '+body.tandas+' tandas ('+Math.floor(kg/50)+' sacos)',primera:0,segunda:0});
         return r;
       }
       if (cleanPath === '/compras') {
@@ -353,12 +354,20 @@ async function api(path, options = {}) {
       }
       if (cleanPath === '/ventas') {
         const params=await c.select('parametros');
-        const precios={primera:4.50,pardo:5.00,jumbo:6.00};
-        params.forEach(p=>{if(p.clave.startsWith('precio_')){const k=p.clave.replace('precio_','');if(precios[k]!==undefined)precios[k]=parseFloat(p.valor)||precios[k];}});
+        const pesoJaba = parseFloat((params.find(p=>p.clave==='peso_jaba_kg')||{}).valor)||18;
+        const pp=parseFloat(body.precio_primera)||0;
+        const ps=parseFloat(body.precio_segunda)||0;
+        const grupos=[['primera',pp],['pardo','jumbo','sucio','quinados',ps]];
         let tj=0,ti=0;
-        for(const k of Object.keys(precios)){ const v=parseFloat(body[k])||0; tj+=v; ti+=v*precios[k]; }
-        const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*18,total:ti});
-        for(const k of Object.keys(precios)){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); }
+        grupos.forEach(([t1,t2,t3,t4,t5,precio])=>{
+          [t1,t2,t3,t4,t5].filter(Boolean).forEach(k=>{
+            const jab=parseFloat(body[k])||0;
+            tj+=jab;
+            ti+=jab*precio;
+          });
+        });
+        const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*pesoJaba,total:ti});
+        for(const k of ['primera','pardo','jumbo','sucio','quinados']){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); }
         return r;
       }
     }
@@ -366,11 +375,11 @@ async function api(path, options = {}) {
     if (method === 'PUT') {
       const m=cleanPath.match(/^\/(.+)\/(\d+)$/);
       if(m){
-        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios', 'configuracion/parametros':'parametros' };
+        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios', 'configuracion/parametros':'parametros', 'formulas':'formulas', 'clientes':'clientes' };
         const table = pathToTable[m[1]];
         if(table) return await c.update(table, body, {'id':'eq.'+m[2]});
       }
-      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:v}); await c.rpc('sumar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); } return {success:true}; }
+      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ const destino = k === 'limpieza' ? 'Primera' : k.charAt(0).toUpperCase()+k.slice(1); await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:v}); await c.rpc('sumar_stock',{p_clase:destino,p_cantidad:v}); } return {success:true}; }
       if(cleanPath==='/configuracion/empresa') return await c.update('empresa',body,{'id':'eq.1'});
     }
     throw new Error('Ruta no implementada: '+method+' '+cleanPath);
@@ -580,7 +589,9 @@ async function renderGalpones() {
 
     const grid = crearEl('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' } });
     for (const g of galpones) {
-      const diasAlimento = g.consumo_diario > 0 ? Math.floor((g.alimento_kg || 0) / g.consumo_diario) : 99;
+      const sacos = Math.floor((g.alimento_kg || 0) / 50);
+      const consSacos = g.consumo_diario || 0;
+      const diasAlimento = consSacos > 0 ? Math.floor(sacos / consSacos) : 99;
       const card = crearEl('div', { className: 'card', style: { cursor: 'pointer' }, onClick: () => modalGalponDetalle(g) }, [
         crearEl('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' } }, [
           crearEl('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
@@ -593,7 +604,7 @@ async function renderGalpones() {
           crearEl('div', {}, [`🟢 ${(g.gallinas || 0).toLocaleString()} gallinas`]),
           crearEl('div', {}, [`📅 ${g.edad_lote || 0} días`]),
           crearEl('div', {}, [`🥚 Prod: ${num(g.produccion_promedio)} jabas/día`]),
-          crearEl('div', {}, [`🌾 Alim: ${num(g.alimento_kg)} kg`]),
+          crearEl('div', {}, [`🌾 Alim: ${sacos} sacos`]),
           crearEl('div', {}, [`⏱ ${diasAlimento >= 30 ? '✅+' : diasAlimento >= 7 ? '✅' : diasAlimento >= 3 ? '⚠️' : '🔴'} ${diasAlimento} días`]),
         ]),
       ]);
@@ -608,12 +619,12 @@ function modalGalpon(g) {
     if (g) return api('/galpones/' + g.id, { method: 'PUT', body: data });
     return api('/galpones', { method: 'POST', body: data });
   }, [
-    { label: 'Nombre', type: 'text', value: g?.nombre || '', required: true },
-    { label: 'Capacidad', type: 'number', value: g?.capacidad || 0 },
-    { label: 'Gallinas', type: 'number', value: g?.gallinas || 0 },
-    { label: 'Edad Lote (días)', type: 'number', value: g?.edad_lote || 0 },
-    { label: 'Consumo Diario (kg)', type: 'number', value: g?.consumo_diario || 0, step: '0.1' },
-    { label: 'Fecha Ingreso', type: 'date', value: g?.fecha_ingreso || '' },
+    { label: 'Nombre', name: 'nombre', type: 'text', value: g?.nombre || '', required: true },
+    { label: 'Capacidad', name: 'capacidad', type: 'number', value: g?.capacidad || 0 },
+    { label: 'Gallinas', name: 'gallinas', type: 'number', value: g?.gallinas || 0 },
+    { label: 'Edad Lote (días)', name: 'edad_lote', type: 'number', value: g?.edad_lote || 0 },
+    { label: 'Consumo Diario (sacos)', name: 'consumo_diario', type: 'number', value: g?.consumo_diario || 0, step: '0.1' },
+    { label: 'Fecha Ingreso', name: 'fecha_ingreso', type: 'date', value: g?.fecha_ingreso || '' },
   ], renderGalpones);
 }
 
@@ -629,9 +640,9 @@ async function modalGalponDetalle(g) {
     { label: 'Capacidad', type: 'static', value: (data.capacidad || 0).toLocaleString() },
     { label: 'Edad Lote', type: 'static', value: `${data.edad_lote || 0} días` },
     { label: 'Fecha Ingreso', type: 'static', value: formatearFecha(data.fecha_ingreso) },
-    { label: 'Alimento (kg)', type: 'static', value: num(data.alimento_kg) },
-    { label: 'Consumo Diario', type: 'static', value: `${num(data.consumo_diario)} kg` },
-    { label: 'Prod. Promedio', type: 'static', value: `${num(data.produccion_promedio)} jabas` },
+    { label: 'Alimento', type: 'static', value: `${Math.floor((data.alimento_kg||0)/50)} sacos (${num(data.alimento_kg)} kg)` },
+    { label: 'Consumo Diario', type: 'static', value: `${num(data.consumo_diario)} sacos (${num((data.consumo_diario||0)*50)} kg)` },
+    { label: 'Prod. Promedio', type: 'static', value: `${num(data.produccion_promedio)} jabas/día` },
   ], null, '480px');
 }
 
@@ -678,13 +689,15 @@ async function renderMolino() {
           crearEl('table', {}, [
             crearEl('thead', {}, [crearEl('tr', {}, ['Galpón','Stock (kg)','Consumo/día','Días restantes','Barra'].map(h => crearEl('th', {}, [h])))]),
             crearEl('tbody', {}, stockAlim.map(g => {
-              const dias = g.consumo_diario > 0 ? Math.floor((g.kg || 0) / g.consumo_diario) : 99;
+              const sacosStock = Math.floor((g.kg || 0) / 50);
+              const consSacos = g.consumo_diario || 0;
+              const dias = consSacos > 0 ? Math.floor(sacosStock / consSacos) : 99;
               const maxRef = Math.max(...stockAlim.map(s => s.kg || 0), 1);
               const pct = Math.min(((g.kg || 0) / maxRef) * 100, 100);
               return crearEl('tr', {}, [
                 crearEl('td', {}, [g.nombre]),
-                crearEl('td', {}, [num(g.kg)]),
-                crearEl('td', {}, [num(g.consumo_diario)]),
+                crearEl('td', {}, [`${sacosStock} sacos`]),
+                crearEl('td', {}, [`${num(g.consumo_diario)} sacos`]),
                 crearEl('td', {}, [crearEl('span', { className: dias >= 7 ? 'chip chip-green' : dias >= 3 ? 'chip chip-orange' : 'chip chip-red' }, [dias + ' días'])]),
                 crearEl('td', {}, [
                   crearEl('div', { className: 'kg-bar-wrap' }, [
@@ -740,21 +753,26 @@ async function renderAlmacenHuevos() {
 
     // Stock actual
     const stock = data.stock || {};
-    const huevosPorClase = {};
-    (data.lotes || []).forEach(l => {
-      if (l.cantidad_disponible > 0) huevosPorClase[l.clase] = (huevosPorClase[l.clase] || 0) + l.cantidad_disponible;
-    });
-
+    let totalJabas = 0;
     const statsGrid = crearEl('div', { className: 'stats-grid' });
-    Object.entries(huevosPorClase).forEach(([clase, cant]) => {
+    Object.entries(stock).forEach(([clase, cant]) => {
+      const c = parseFloat(cant) || 0;
+      totalJabas += c;
       statsGrid.appendChild(crearEl('div', { className: 'stat-card' }, [
         crearEl('div', { className: 'stat-icon bg-blue' }, ['🥚']),
         crearEl('div', { className: 'stat-info' }, [
           crearEl('div', { className: 'stat-label' }, [clase]),
-          crearEl('div', { className: 'stat-value' }, [num(cant)]),
+          crearEl('div', { className: 'stat-value' }, [num(c)]),
         ]),
       ]));
     });
+    statsGrid.appendChild(crearEl('div', { className: 'stat-card', style: { background: 'var(--primary-light)', border: '2px solid var(--primary)' } }, [
+      crearEl('div', { className: 'stat-icon bg-blue' }, ['📦']),
+      crearEl('div', { className: 'stat-info' }, [
+        crearEl('div', { className: 'stat-label', style: { fontWeight: 700 } }, ['TOTAL JABAS']),
+        crearEl('div', { className: 'stat-value', style: { fontSize: '24px', fontWeight: 700 } }, [num(totalJabas)]),
+      ]),
+    ]));
     c.appendChild(statsGrid);
 
     // Clasificación
@@ -964,14 +982,8 @@ async function renderVentas() {
     ]);
     vaciar(c);
 
-    const precios = { primera: 4.50, pardo: 5.00, jumbo: 6.00 };
-    params.forEach(p => {
-      if (p.clave.startsWith('precio_')) {
-        const key = p.clave.replace('precio_', '');
-        if (precios[key] !== undefined) precios[key] = parseFloat(p.valor) || precios[key];
-      }
-    });
-    ventaPrecios = { ...precios };
+    const pesoJaba = parseFloat((params.find(p => p.clave === 'peso_jaba_kg') || {}).valor) || 18;
+    ventaPesoJaba = pesoJaba;
 
     c.appendChild(crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Nueva Venta'])]),
@@ -982,12 +994,27 @@ async function renderVentas() {
           ...clientes.map(c => crearEl('option', { value: c.id, label: c.nombre }, [c.nombre])),
         ])]),
       ]),
-      crearEl('div', { className: 'form-grid', style: { marginTop: '8px' } }, [
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Primera (S/ ' + precios.primera.toFixed(2) + ')']), crearEl('input', { id: 'ventaPrimera', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Pardo (S/ ' + precios.pardo.toFixed(2) + ')']), crearEl('input', { id: 'ventaPardo', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jumbo (S/ ' + precios.jumbo.toFixed(2) + ')']), crearEl('input', { id: 'ventaJumbo', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+      crearEl('div', { className: 'form-grid', style: { gap: '8px', marginTop: '8px' } }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x jaba PRIMERA']), crearEl('input', { id: 'precioPrimera', type: 'number', value: '4.50', min: '0', step: '0.01', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x jaba SEGUNDA (Pardo, Jumbo, Sucio, Quiñados)']), crearEl('input', { id: 'precioSegunda', type: 'number', value: '3.50', min: '0', step: '0.01', onInput: calcVenta })]),
       ]),
-      crearEl('div', { style: { marginTop: '8px', fontSize: '12px', color: 'var(--text3)' } }, ['Los precios se configuran en Configuración → Parámetros']),
+      crearEl('div', { className: 'table-wrap', style: { marginTop: '8px' } }, [crearEl('table', {}, [
+        crearEl('thead', {}, [crearEl('tr', {}, ['Categoría','Tipo','Jabas','Subtotal'].map(h => crearEl('th', {}, [h])))]),
+        crearEl('tbody', {}, [
+          crearEl('tr', {}, [
+            crearEl('td', { style: { fontWeight: 600, background: 'var(--primary-light)' } }, ['PRIMERA']),
+            crearEl('td', { style: { fontWeight: 500 } }, ['Primera']),
+            crearEl('td', {}, [crearEl('input', { id: 'venta_primera', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
+            crearEl('td', { id: 'ventaSub_primera', style: { fontWeight: 600 } }, ['S/ 0.00']),
+          ]),
+          ...['pardo','jumbo','sucio','quinados'].map((k,i) => crearEl('tr', {}, [
+            i === 0 ? crearEl('td', { rowspan: '4', style: { fontWeight: 600, background: 'var(--orange-light)' } }, ['SEGUNDA']) : null,
+            crearEl('td', { style: { fontWeight: 500 } }, [{pardo:'Pardo',jumbo:'Jumbo',sucio:'Sucio',quinados:'Quiñados'}[k]]),
+            crearEl('td', {}, [crearEl('input', { id: 'venta_'+k, type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
+            crearEl('td', { id: 'ventaSub_'+k, style: { fontWeight: 600 } }, ['S/ 0.00']),
+          ])),
+        ]),
+      ])]),
       crearEl('div', { id: 'ventaResumen', style: { marginTop: '12px', padding: '12px', background: 'var(--primary-light)', borderRadius: '8px', display: 'flex', gap: '24px', fontSize: '14px' } }, [
         crearEl('span', {}, ['Total Jabas: <strong id="ventaTotalJabas">0.00</strong>']),
         crearEl('span', {}, ['Peso: <strong id="ventaPeso">0.00</strong> kg']),
@@ -1017,17 +1044,24 @@ async function renderVentas() {
   } catch { c.innerHTML = '<div class="card">Error al cargar ventas</div>'; }
 }
 
-let ventaPrecios = { primera: 4.50, pardo: 5.00, jumbo: 6.00 };
+let ventaPesoJaba = 18;
 
 function calcVenta() {
-  const campos = ['primera','pardo','jumbo'];
+  const pp = parseFloat($('precioPrimera')?.value) || 0;
+  const ps = parseFloat($('precioSegunda')?.value) || 0;
+  const grupos = [['primera',pp],['pardo','jumbo','sucio','quinados',ps]];
   let totalJabas = 0, totalImporte = 0;
-  campos.forEach(c => {
-    const v = parseFloat($('venta'+c.charAt(0).toUpperCase()+c.slice(1))?.value) || 0;
-    totalJabas += v;
-    totalImporte += v * (ventaPrecios[c] || 0);
+  grupos.forEach(([t1,t2,t3,t4,t5,precio]) => {
+    [t1,t2,t3,t4,t5].filter(Boolean).forEach(k => {
+      const jab = parseFloat($('venta_'+k)?.value) || 0;
+      totalJabas += jab;
+      const sub = jab * precio;
+      totalImporte += sub;
+      const el = $('ventaSub_'+k);
+      if (el) el.innerHTML = 'S/ ' + num(sub);
+    });
   });
-  const peso = totalJabas * 18;
+  const peso = totalJabas * ventaPesoJaba;
   $('ventaTotalJabas').innerHTML = num(totalJabas);
   $('ventaPeso').innerHTML = num(peso);
   $('ventaImporte').innerHTML = num(totalImporte);
@@ -1037,12 +1071,19 @@ async function registrarVenta() {
   const fecha = $('ventaFecha')?.value || hoy();
   const cliente_id = parseInt($('ventaCliente')?.value);
   if (!cliente_id) return mostrarMensaje('Seleccione un cliente', 'warning');
-  const campos = ['primera','pardo','jumbo'];
-  const body = { fecha, cliente_id, cliente_nombre: $('ventaCliente')?.selectedOptions[0]?.text || '' };
-  campos.forEach(c => {
-    body[c] = parseFloat($('venta'+c.charAt(0).toUpperCase()+c.slice(1))?.value) || 0;
+  const pp = parseFloat($('precioPrimera')?.value) || 0;
+  const ps = parseFloat($('precioSegunda')?.value) || 0;
+  const body = { fecha, cliente_id, cliente_nombre: $('ventaCliente')?.selectedOptions[0]?.text || '', precio_primera: pp, precio_segunda: ps };
+  let totalJabas = 0, totalImporte = 0;
+  const grupos = [['primera',pp],['pardo','jumbo','sucio','quinados',ps]];
+  grupos.forEach(([t1,t2,t3,t4,t5,precio]) => {
+    [t1,t2,t3,t4,t5].filter(Boolean).forEach(k => {
+      const jab = parseFloat($('venta_'+k)?.value) || 0;
+      body[k] = jab;
+      totalJabas += jab;
+      totalImporte += jab * precio;
+    });
   });
-  const totalJabas = campos.reduce((s, c) => s + (parseFloat(body[c]) || 0), 0);
   if (totalJabas <= 0) return mostrarMensaje('Debe vender al menos 1 jaba', 'warning');
   try {
     await api('/ventas', { method: 'POST', body });
@@ -1120,7 +1161,7 @@ let configTab = 'usuarios';
 async function renderConfiguracion() {
   const c = $('content'); vaciar(c);
   c.appendChild(crearEl('div', { className: 'tabs', id: 'configTabs' }, [
-    ['usuarios','Usuarios'],['empresa','Empresa'],['parametros','Parámetros']
+    ['usuarios','Usuarios'],['empresa','Empresa'],['parametros','Parámetros'],['formulas','Fórmulas'],['clientes','Clientes']
   ].map(([k, v]) => crearEl('div', { className: `tab ${k === configTab ? 'active' : ''}`, onClick: () => { configTab = k; renderConfiguracion(); } }, [v]))));
   if (configTab === 'usuarios') {
     try {
@@ -1160,6 +1201,35 @@ async function renderConfiguracion() {
         ])]),
       ]));
     } catch {}
+  } else if (configTab === 'formulas') {
+    try {
+      const formulas = await api('/formulas');
+      c.appendChild(crearEl('div', { className: 'card' }, [
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Fórmulas de Alimento']), crearEl('div', { className: 'actions' }, [crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => modalFormula(null) }, ['+ Nueva'])])]),
+        crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Nombre','Descripción','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, formulas.map(f => crearEl('tr', {}, [
+            crearEl('td', { style: { fontWeight: 500 } }, [f.nombre]),
+            crearEl('td', {}, [f.descripcion||'-']),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => modalFormula(f) }, ['✏ Editar'])]),
+          ]))),
+        ])]),
+      ]));
+    } catch {}
+  } else if (configTab === 'clientes') {
+    try {
+      const clientes = await api('/clientes');
+      c.appendChild(crearEl('div', { className: 'card' }, [
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Clientes']), crearEl('div', { className: 'actions' }, [crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => modalCliente(null) }, ['+ Nuevo'])])]),
+        crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Nombre','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, clientes.map(cl => crearEl('tr', {}, [
+            crearEl('td', { style: { fontWeight: 500 } }, [cl.nombre]),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => modalCliente(cl) }, ['✏ Editar'])]),
+          ]))),
+        ])]),
+      ]));
+    } catch {}
   }
 }
 
@@ -1187,6 +1257,25 @@ async function editarParametro(p) {
   ], renderConfiguracion);
 }
 
+function modalFormula(f) {
+  abrirModal('Fórmula', [f ? 'Guardar' : 'Crear'], async (data) => {
+    if (f) return api('/formulas/' + f.id, { method: 'PUT', body: data });
+    return api('/formulas', { method: 'POST', body: data });
+  }, [
+    { label: 'Nombre', name: 'nombre', type: 'text', value: f?.nombre || '', required: true },
+    { label: 'Descripción', name: 'descripcion', type: 'text', value: f?.descripcion || '' },
+  ], renderConfiguracion);
+}
+
+function modalCliente(cl) {
+  abrirModal('Cliente', [cl ? 'Guardar' : 'Crear'], async (data) => {
+    if (cl) return api('/clientes/' + cl.id, { method: 'PUT', body: data });
+    return api('/clientes', { method: 'POST', body: data });
+  }, [
+    { label: 'Nombre', name: 'nombre', type: 'text', value: cl?.nombre || '', required: true },
+  ], renderConfiguracion);
+}
+
 function modalUsuario(u) {
   abrirModal('Usuario', [u ? 'Guardar' : 'Crear'], async (data) => {
     if (u) return api('/configuracion/usuarios/' + u.id, { method: 'PUT', body: data });
@@ -1204,7 +1293,10 @@ function abrirModal(titulo, acciones, onSubmit, campos, onClose, width) {
   const modal = crearEl('div', { className: 'modal', style: width ? { maxWidth: width } : {} });
   const inputs = {};
 
-  modal.appendChild(crearEl('h3', {}, [titulo]));
+    modal.appendChild(crearEl('h3', {}, [titulo]));
+
+  const fieldId = c => 'modal_' + (c.name || c.label).replace(/[^a-zA-Z0-9_]/g, '_');
+  const fieldKey = c => c.name || c.label.toLowerCase().replace(/[^a-z0-9_]/g, '');
 
   const formGrid = crearEl('div', { className: 'form-grid' });
   for (const c of campos) {
@@ -1213,11 +1305,11 @@ function abrirModal(titulo, acciones, onSubmit, campos, onClose, width) {
     if (c.type === 'static') {
       grp.appendChild(crearEl('div', { style: { padding: '8px 0', fontWeight: 500, color: 'var(--text)' } }, [c.value || '-']));
     } else if (c.type === 'select') {
-      const sel = crearEl('select', { id: 'modal_' + c.label.replace(/\s+/g, '_') });
+      const sel = crearEl('select', { id: fieldId(c) });
       (c.options || []).forEach(o => sel.appendChild(crearEl('option', { value: o, selected: o === c.value }, [o])));
       grp.appendChild(sel);
     } else {
-      const inp = crearEl('input', { type: c.type || 'text', value: c.value ?? '', placeholder: c.label, required: c.required ? '' : undefined, step: c.step, id: 'modal_' + c.label.replace(/\s+/g, '_') });
+      const inp = crearEl('input', { type: c.type || 'text', value: c.value ?? '', placeholder: c.label, required: c.required ? '' : undefined, step: c.step, id: fieldId(c) });
       grp.appendChild(inp);
     }
     formGrid.appendChild(grp);
@@ -1235,9 +1327,9 @@ function abrirModal(titulo, acciones, onSubmit, campos, onClose, width) {
     actionsDiv.appendChild(crearEl('button', { className: 'btn btn-primary', onClick: async () => {
       const data = {};
       for (const c of campos) {
-        if (c.type === 'static') { data[c.label.toLowerCase()] = c.value; continue; }
-        const el = $('modal_' + c.label.replace(/\s+/g, '_'));
-        if (el) data[c.label.toLowerCase().replace(/\s+/g, '_')] = el.value;
+        if (c.type === 'static') { data[fieldKey(c)] = c.value; continue; }
+        const el = $(fieldId(c));
+        if (el) data[fieldKey(c)] = el.value;
       }
       try {
         if (typeof onSubmit === 'function') {

@@ -324,7 +324,7 @@ END $$;
 -- ============================================================
 INSERT INTO stock_huevos (clase, cantidad) VALUES
   ('Primera', 0), ('Segunda', 0), ('Pardo', 0), ('Jumbo', 0),
-  ('Sucio', 0), ('Limpieza', 0), ('Quiñados', 0)
+  ('Sucio', 0), ('Quiñados', 0)
 ON CONFLICT (clase) DO NOTHING;
 
 INSERT INTO empresa (nombre, ruc, direccion, telefono) VALUES
@@ -332,14 +332,7 @@ INSERT INTO empresa (nombre, ruc, direccion, telefono) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO parametros (clave, valor, descripcion) VALUES
-  ('precio_primera', '4.50', 'Precio por jaba de primera'),
-  ('precio_segunda', '3.50', 'Precio por jaba de segunda'),
-  ('precio_pardo', '5.00', 'Precio por jaba de huevos pardos'),
-  ('precio_jumbo', '6.00', 'Precio por jaba jumbo'),
-  ('precio_sucio', '2.50', 'Precio por jaba de huevos sucios'),
-  ('precio_limpieza', '3.00', 'Precio por jaba de limpieza'),
-  ('precio_quinados', '1.50', 'Precio por jaba de huevos quiñados'),
-  ('peso_jaba_kg', '18', 'Peso por jaba en kilogramos')
+  ('peso_jaba_kg', '18', 'Peso promedio por jaba en kilogramos')
 ON CONFLICT (clave) DO NOTHING;
 
 INSERT INTO alertas (tipo, icono, mensaje) VALUES
