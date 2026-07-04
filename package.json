@@ -1,8 +1,17 @@
-{ "name": "IHC.AVICOLA", "version": "1.0.0", "private": true, "description": "ERP Avícola - Aplicación web completa con Supabase como backend", "main": "server.js", "scripts": {
-  "start": "node server.js",
-  "dev": "node server.js",
-  "deploy": "echo \"Listo para desplegar en Render. Agregar variables de entorno SUPABASE_URL y SUPABASE_ANON_KEY en Render\")
-}, "dependencies": {
-  "express": "^4.18.2"
-}, "author": "IHC A VICOLA", "license": "MIT"
+{
+  "name": "IHC.AVICOLA",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ERP Avícola - Aplicación web completa con Supabase como backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "deploy": "echo \"Listo para desplegar en Render. Agregar variables de entorno SUPABASE_URL y SUPABASE_ANON_KEY en Render\""
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "author": "IHC A VICOLA",
+  "license": "MIT"
 }
