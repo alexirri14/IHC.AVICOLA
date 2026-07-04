@@ -1,171 +1,251 @@
-# IHC.AVICOLA (ERP para Producción Avícola)
+# Supabase Configuration for IHC.AVICOLA ERP
 
-## Resumen del Proyecto
+## Configuración de Variables de Entorno
 
-IHC.AVICOLA es una aplicación web completa de tipo ERP (Planificación de Recursos Empresariales) diseñada para la gestión integral de operaciones de producción avícola. La aplicación facilita la administración de múltiples aspectos de la producción, desde la gestión de galpones de aves hasta el control de almacenes, ventas, compras y generación de informes.
+Esta aplicación ERP para producción avícola utiliza Supabase como backend y requiere las siguientes variables de entorno para funcionar correctamente:
 
-## Estructura del Proyecto
+### Variables Necesarias
 
-El proyecto consta de dos componentes principales:
+#### SUPABASE_URL
+URL del proyecto Supabase
+```bash
+SUPABASE_URL=https://gldoiaecfjsaolfmonsr.supabase.co
+```
 
-### Frontend (IHC.AVICOLA)
-- **app.js**: Lógica del front-end (1,242 líneas)
-- **index.html**: Estructura principal de la página
-- **styles.css**: Estilos globales
+#### SUPABASE_ANON_KEY
+Clave anónima/public de Supabase (URL + sb_publishable_*)
+```bash
+SUPABASE_ANON_KEY=sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL
+```
 
-El frontend es una aplicación web moderna desarrollada con JavaScript puro, que incluye:
-- Autenticación de usuarios con roles
-- Navegación entre secciones
-- Paneles de control para cada aspecto del negocio
-- Formularios de entrada de datos
-- Tablas de visualización de datos
-- Gráficos de producción
-- Alertas y notificaciones
+### Descripción de Cada Variable
 
-### Base de Datos (Supabase)
-Supabase está configurado como la base de datos backend, proporcionando:
-- Almacenamiento y recuperación de datos
-- Autenticación de usuarios y gestión de roles
-- Relaciones entre tablas
-- Funcionalidad RPC para operaciones de reporte
+#### SUPABASE_URL
+- **Propósito**: URL base de la API de Supabase
+- **Dónde obtenerla**: Panel de Settings → API en Supabase
+- **Formato**: `https://tu-proyecto.supabase.co`
+- **Ejemplo**: `https://gldoiaecfjsaolfmonsr.supabase.co`
 
-## Características Principales
+#### SUPABASE_ANON_KEY
+- **Propósito**: Clave de API anónima para el cliente (frontend)
+- **Dónde obtenerla**: Panel de Settings → API en Supabase
+- **Formato**: Comienza con `sb_publishable_` seguido de caracteres
+- **Ejemplo**: `sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL`
 
-### 1. Autenticación de Usuarios con Roles
-- Inicio de sesión con correo electrónico y contraseña
-- Cuatro roles de usuario con diferentes niveles de acceso:
-  - **Gerencia**: Acceso completo, puede ver reportes e información de la empresa
-  - **Producción**: Gestión de galpones, molino y producción diaria
-  - **Almacén**: Control de inventario, compras y clasificaciones de huevos
-  - **Ventas**: Gestión de ventas y clientes
-- Control de permisos basado en roles para todas las secciones
+### Variables Complementarias (Opcionales)
 
-### 2. Módulo de Producción Avícola
-- **Gestión de Galpones**: Creación, edición y monitoreo de la capacidad de gallinas
-- **Registro de Producción**: Seguimiento diario de producción, incluyendo huevos, aves muertas y mortalidad
-- **Módulo de Molino**: Gestión de fórmulas de alimentos, registro de producción y monitoreo de consumo de alimento
-- **Clasificación de Huevos**: Separación de huevos por tipo (primera, segunda, pardo, jumbo, etc.)
+#### SUPABASE_SERVICE_ROLE_KEY
+- **Propósito**: Clave de rol de servicio para operaciones del servidor
+- **Dónde obtenerla**: Panel de Settings → API en Supabase
+- **Diferencia**: Más permisiivas que la clave anónima
+- **Uso típico**: Operaciones del servidor donde no necesitas seguridad basada en RLS
 
-### 3. Gestión de Inventario
-- **Almacén de Huevos**: Seguimiento del stock actual y movimientos entrantes
-- **Almacén de Insumos**: Control de materias primas, insumos y niveles de stock mínimo
-- **Registro de Compras**: Trazabilidad de compras a proveedores con control de nivel de stock
+### Agregar a Render
 
-### 4. Sistema de Ventas
-- **Gestión de Clientes**: Registro y seguimiento de clientes
-- **Facturación de Ventas**: Venta detallada de jabas de huevos con cálculo automático de precios
-- **Verificación de Stock**: Confirmación automática de disponibilidad en inventario
+Para desplegar en Render:
 
-### 5. Reportes y Análisis
-- **Panel de Control**: KPIs y métricas clave para toda la operación
-- **Reportes de Producción**: Seguimiento de días, horas y distribución de producción
-- **Estadísticas de Ventas**: Análisis detallado de ventas por día, cliente y tipo de huevos
-- **Reportes de Inventario**: Estado actual de inventarios y alertas
-- **Reportes de Alimento**: Eficiencia de producción, consumo y costos por fórmula
+1. Crea un proyecto en [Render.com](https://render.com)
+2. Selecciona "Web Service"
+3. Conéctate a tu repositorio de GitHub
+4. En Variables de Entorno, agrega:
 
-### 6. Administración del Sistema
-- **Configuración de la Empresa**: Datos básicos de la empresa (nombre, RUC, dirección)
-- **Gestión de Usuarios**: Creación y edición de usuarios con roles asignados
-- **Parámetros del Sistema**: Control de configuraciones generales
+```
+SUPABASE_URL=https://gldoiaecfjsaolfmonsr.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL
+```
 
-## Tecnologías Utilizadas
+### Configuración de Base de Datos Supabase
 
-### Frontend
-- **JavaScript (ES6+)**: Funcionalidad cliente completa
-- **HTML5**: Estructura de la interfaz de usuario
-- **CSS3**: Estilizado moderno con soporte completo para móviles
+#### Tablas del Proyecto
 
-### Backend
-- **Supabase**: Base de datos PostgreSQL-as-a-service con autenticación incluida
-- **REST API**: Servicios para todas las operaciones CRUD
-- **Almacenamiento en tiempo real**: A través de las suscripciones de Supabase
+Esta aplicación utiliza las siguientes tablas en Supabase:
 
-## Características Clave del Código
+| Tabla | Descripción |
+|-------|-------------|
+| `usuarios` | Información de usuarios y roles |
+| `empleados` | Datos de empleados |
+| `galpones` | Información de galpones (aves) |
+| `formulas` | Fórmulas de alimento para molinos |
+| `molino` | Registro de producción de alimento |
+| `almacen_huevos` | Lotes y clasificaciones de huevos |
+| `lotes_huevos` | Lotes individuales de huevos |
+| `movimientos_huevos` | Movimientos de entradas/salidas de huevos |
+| `insumos` | Insumos y materias primas |
+| `compras` | Compras a proveedores |
+| `proveedores` | Listado de proveedores |
+| `clientes` | Información de clientes |
+| `ventas` | Registro de ventas |
+| `movimientos_inventario` | Movimientos de insumos |
+| `parametros` | Parámetros del sistema |
+| `empresa` | Datos de la empresa |
 
-### Funciones Principales de Utilidad
-- **crearEl()**: Función versátil para creación de elementos HTML con soporte completo de propiedades
-- **vaciar()**: Limpieza eficiente de elementos de DOM
-- **num()**: Formateo numérico consistente
-- **formatearFecha()**: Formateo optimizado para mostrador
-- **api()**: Cliente HTTP utilitario para llamadas REST API
+#### Configuración de Autenticación
 
-### Funciones Específicas del Negocio
-- **Renderizado de componentes**: Secciones separadas para cada función principal
-- **Validación de formularios**: Control de formulario centralizado con notificaciones de errores
-- **Control de sesión**: Estado de autenticación entre paginas
-- **Manejo de toasts**: Sistema de notificaciones emergentes
-- **Suscripciones a tiempo real**: Actualización automática de datos sin recarga de página
+#### Políticas de Seguridad (RLS)
 
-## Instalación y Configuración
+Cada tabla tiene configuradas Row-Level Security (RLS) policies basadas en roles:
 
-### 1. Requisitos Previos
-- Navegador web moderno (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
-- Conectividad a internet
-- Servidor o proveedor de hosting (Ej: GitHub Pages, Netlify, Render, Vercel)
+- **Usuarios sin rol**: Sin acceso (excepto tabla usuarios para registro)
+- **Usuario con rol 'usuario'**: Acceso básico limitado
+- **Usuario con rol 'admin'**: Acceso completo a todas las operaciones
 
-### 2. Configuración del Proyecto
-1. **Supabase**
-   - Crear nuevo proyecto en https://supabase.io
-   - Ejecutar el script de seed inicial en la base de datos
-   - Copiar la URL del proyecto y la clave pública anon (URL + sb_publishable_*)
+#### Políticas Específicas por Rol
 
-2. **Configuración del Lado del Cliente**
-   ```javascript
-   // En app.js
-   const SUPABASE_URL = 'your-supabase-url';
-   const SUPABASE_ANON_KEY = 'your-anon-key';
-   ```
+| Rol | Permisos |
+|-----|----------|
+| `admin` | Todo acceso a todas las tablas |
+| `gerencia` | Leer Reportes, leer Empresa, editar usuarios |
+| `produccion` | Escribir Galpones, Escribir Molino, Leer Galpones, Leer Molino |
+| `almacen` | Leer AlmacenHuevos, Escribir AlmacenInsumos, Leer Insumos, Escribir Compras |
+| `ventas` | Leer Clientes, Escribir Ventas, Escribir AlmacenHuevos |
 
-3. **Configuración del Lado del Servidor** (si se usa)
-   ```bash
-   // Variables de entorno para hosting
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_ANON_KEY=your-anon-key
-   ```
+#### Autenticación con Email/Contraseña
 
-### 3. Despliegue
-El proyecto es completamente compatible para ser usado como aplicación web estática:
+La aplicación utiliza Auth de Supabase con:
 
-- **GitHub Pages**: `gh-pages` branch
-- **Netlify**: Deploy from Git
-- **Render**: Construir desde GitHub, desplegar como sitio estático
-- **Vercel**: Deploy a Next.js con base de datos Edge (si se necesita)
+```javascript
+// Iniciar sesión
+const { data, error } = await supabase.auth.signInWithPassword({
+  email: 'usuario@ejemplo.com',
+  password: 'tu-contraseña'
+})
 
-## Cobertura de Usabilidad
+// Cerrar sesión  
+await supabase.auth.signOut()
 
-### Navegación del Usuario
-- ✅ Todas las operaciones se realizan completamente dentro del navegador
-- ✅ El manejo normal de URL (SPA) funciona en todos los navegadores modernos
-- ✅ Nombre de usuario recordado entre sesiones
-- ✅ Última sección visitada restaurada en el reinicio
+// Obtener sesión actual
+const { data: { session }, error } = await supabase.auth.getSession()
+```
 
-### Responsividad
-- ✅ Diseño adaptado completamente a dispositivos móviles
-- ✅ Uso de CSS Grid y Flexbox para rozamiento perfecto
-- ✅ Elementos de interfaz de usuario accesibles e interpretables para todos los dispositivos
-- ✅ Escalado suave en dispositivos de diferente tamaño
+### Validación
 
-### Experiencia de Usuario
-- ✅ Modal emergentes elegantes y centran toda la página
-- ✅ Opciones de toast de notificación con colores semánticos
-- ✅ Validación de formularios en tiempo real
-- ✅ Interacción fluida optimizada para bajo retardo
-- ✅ Zonas de click etéreas y responisvas
+#### Validación de Variables de Entorno
 
-### Manejo de Errores
-- ✅ Manejo global unificado de errores
-- ✅ Reporte detallado y mensaje mostrado para cada error
-- ✅ Retroceso seguro en caso de interrupción de datos
-- ✅ Información sobre __fallback en caso de error de carga de datos
+```javascript
+// Validar variables de entorno en el servidor
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-### Compatibilidad Con Navegadores
-- ✅ Chrome 90+
-- ✅ Firefox 88+
-- ✅ Safari 14+
-- ✅ Edge 90+
-- ✅ IE11 (con complementos, con limitaciones)
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Faltan variables de entorno de Supabase');
+}
 
-## Licencia
-MIT
+// Validación adicional del formato
+if (!SUPABASE_URL.startsWith('https://') || !SUPABASE_URL.includes('.supabase.co')) {
+  throw new Error('URL de Supabase inválida');
+}
 
-Este proyecto demuestra una ERP completa de una solo página para producción avícola, con soporte completo para Supabase como backend, haciendo hincapié en la entrega de una gestión fluida de datos del lado del cliente. Es un producto mínimo viable que cubre todas las necesidades comerciales básicas para una operación de producción avícola a pequeña escala.
+if (!SUPABASE_ANON_KEY.startsWith('sb_publishable_')) {
+  throw new Error('Clave anónima de Supabase inválida');
+}
+```
+
+#### Manejo de Errores
+
+```javascript
+// Manejo de errores específicos de Supabase
+async function supabaseRequest(endpoint, options = {}) {
+  const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+
+  try {
+    const response = await fetch(url, { ...options, headers });
+    
+    if (response.status === 401) {
+      // Token expirado o inválido
+      await supabase.auth.signOut();
+      throw new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+    }
+    
+    if (response.status === 403) {
+      // Sin permisos suficientes
+      throw new Error('No tienes permiso para realizar esta acción.');
+    }
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Error de Supabase: ${error}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    if (error.message.includes('Failed to fetch')) {
+      throw new Error('Error de conexión. Verifica tu internet e intenta de nuevo.');
+    }
+    throw error;
+  }
+}
+```
+
+### Ejemplos de Configuración
+
+#### Ejemplo Completo .env (para desarrollo local)
+
+```bash
+# .env.local
+SUPABASE_URL=https://gldoiaecfjsaolfmonsr.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL
+```
+
+#### Ejemplo para Render
+
+```
+# Variables de Entorno en Render
+SUPABASE_URL=https://gldoiaecfjsaolfmonsr.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL
+```
+
+### Manual de Solución de Problemas
+
+#### Error Común: Variables Faltantes
+
+**Síntoma**: "Faltan variables de entorno de Supabase"
+
+**Solución**:
+1. Verifica que SUPABASE_URL y SUPABASE_ANON_KEY estén configuradas
+2. Verifica los valores exactos en el panel de Supabase (Settings → API)
+3. Para Render, verifica que las variables estén correctamente configuradas
+
+#### Error Común: Formato Inválido
+
+**Síntoma**: "URL de Supabase inválida" o "Clave anónima de Supabase inválida"
+
+**Solución**:
+```
+URL correcta: https://tu-proyecto.supabase.co
+Clave correcta: sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL
+```
+
+#### Error Común: No Se Pueden Realizar Operaciones
+
+**Síntoma**: "Error de Supabase: 401" o "403"
+
+**Posibles causas**:
+- Token de sesión expirado
+- Usuario no autenticado
+- El rol del usuario no tiene los permisos necesarios
+
+**Solución**:
+1. Inicia sesión de nuevo
+2. Verifica el rol del usuario en la base de datos de Supabase
+3. Asegúrate de que la tabla tiene una política RLS adecuada
+
+### Notas Finales
+
+La configuración de Supabase es simple pero crítica. Asegúrate de:
+
+1. **Siempre** usar variables de entorno en producción
+2. **Nunca** hardcodear las credenciales en el código fuente
+3. **Nunca** compartir las claves anónimas (son públicas)
+4. **Usar** SUPABASE_URL + SUPABASE_ANON_KEY para el frontend
+5. **Considerar** agregar SUPABASE_SERVICE_ROLE_KEY si necesitas operaciones del servidor
+
+Para más información, visita:
+- [Documentación de Supabase](https://supabase.com/docs)
+- [Documentación de Autenticación](https://supabase.com/docs/guides/auth)
+- [Documentación de Políticas RLS](https://supabase.com/docs/guides/database/row-level-security)

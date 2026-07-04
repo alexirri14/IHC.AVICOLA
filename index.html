@@ -1,61 +1,137 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>ERP Avícola</title>
-<link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ERP Avícola - Sistema de Gestión Avícola</title>
+  <meta name="description" content="Sistema ERP completo para operaciones avícolas con Supabase como backend">
+  <meta name="theme-color" content="#1a73e8">
+  <link rel="manifest" href="site.webmanifest">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://your-domain.com/">
+  <meta property="og:title" content="ERP Avícola - Sistema de Gestión Avícola">
+  <meta property="og:description" content="Sistema ERP completo para operaciones avícolas con Supabase como backend">
+  <meta property="og:image" content="https://your-domain.com/og-image.jpg">
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://your-domain.com/">
+  <meta property="twitter:title" content="ERP Avícola - Sistema de Gestión Avícola">
+  <meta property="twitter:description" content="Sistema ERP completo para operaciones avícolas con Supabase como backend">
+  <meta property="twitter:image" content="https://your-domain.com/twitter-image.jpg">
+  
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-<div class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <span class="logo">🥚</span>
-    <div>
+  <div class="app-loading">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
       <h1>ERP Avícola</h1>
-      <small id="empresaNombre">El Rancho del Buen Pastor</small>
+      <p>Sistema de Gestión Avícola</p>
+      <p class="loading-message">Inicializando aplicación...</p>
     </div>
   </div>
-  <nav class="sidebar-nav" id="sidebarNav">
-    <div class="nav-item active" data-section="dashboard"><span class="icon">🏠</span> Dashboard</div>
-    <div class="nav-item" data-section="galpones"><span class="icon">🐔</span> Galpones</div>
-    <div class="nav-item" data-section="molino"><span class="icon">🌾</span> Molino</div>
-    <div class="nav-item" data-section="inventario"><span class="icon">📦</span> Inventario <span class="arrow">▶</span></div>
-    <div class="nav-sub" id="subInventario">
-      <div class="nav-item" data-section="almacen-huevos"><span class="icon">🥚</span> Almacén de Huevos</div>
-      <div class="nav-item" data-section="almacen-insumos"><span class="icon">📦</span> Almacén de Insumos</div>
-    </div>
-    <div class="nav-item" data-section="compras"><span class="icon">🛒</span> Compras</div>
-    <div class="nav-item" data-section="ventas"><span class="icon">💰</span> Ventas</div>
-    <div class="nav-item" data-section="reportes"><span class="icon">📊</span> Reportes</div>
-    <div class="nav-item" data-section="configuracion"><span class="icon">⚙</span> Configuración</div>
-  </nav>
-  <div class="sidebar-footer" id="sidebarFooter">
-    <div class="user-info">
-      <div class="user-avatar" id="userAvatar">A</div>
-      <div>
-        <div class="user-name" id="userName">Admin</div>
-        <div class="user-rol" id="userRol">Administrador</div>
+  
+  <!-- Contenedor principal que se mostrará después de la carga -->
+  <div id="app-container" class="hidden">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="logo">🥚</span>
+        <div>
+          <h1>ERP Avícola</h1>
+          <small id="empresaNombre">El Rancho del Buen Pastor</small>
+        </div>
+      </div>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <div class="nav-item active" data-section="dashboard"><span class="icon">🏠</span> Dashboard</div>
+        <div class="nav-item" data-section="galpones"><span class="icon">🐔</span> Galpones</div>
+        <div class="nav-item" data-section="molino"><span class="icon">🌾</span> Molino</div>
+        <div class="nav-item" data-section="inventario"><span class="icon">📦</span> Inventario <span class="arrow">▶</span></div>
+        <div class="nav-sub" id="subInventario">
+          <div class="nav-item" data-section="almacen-huevos"><span class="icon">🥚</span> Almacén de Huevos</div>
+          <div class="nav-item" data-section="almacen-insumos"><span class="icon">📦</span> Almacén de Insumos</div>
+        </div>
+        <div class="nav-item" data-section="compras"><span class="icon">🛒</span> Compras</div>
+        <div class="nav-item" data-section="ventas"><span class="icon">💰</span> Ventas</div>
+        <div class="nav-item" data-section="reportes"><span class="icon">📊</span> Reportes</div>
+        <div class="nav-item" data-section="configuracion"><span class="icon">⚙</span> Configuración</div>
+      </nav>
+      <div class="sidebar-footer" id="sidebarFooter">
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar">A</div>
+          <div>
+            <div class="user-name" id="userName">Admin</div>
+            <div class="user-rol" id="userRol">Administrador</div>
+          </div>
+        </div>
+        <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
       </div>
     </div>
-    <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
-  </div>
-</div>
 
-<div class="main">
-  <div class="topbar">
-    <button class="hamburger" id="hamburger">☰</button>
-    <h2 id="sectionTitle">Dashboard</h2>
-    <div class="topbar-info">
-      <span class="role-badge" id="roleBadge">Administrador</span>
+    <div class="main">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <h2 id="sectionTitle">Dashboard</h2>
+        <div class="topbar-info">
+          <span class="role-badge" id="roleBadge">Administrador</span>
+        </div>
+      </div>
+      <div class="content" id="content">
+        <!-- El contenido se cargará dinámicamente aquí -->
+        <div class="card">Cargando...</div>
+      </div>
     </div>
-  </div>
-  <div class="content" id="content">
-  </div>
-</div>
 
-<div id="modalContainer"></div>
+    <div id="modalContainer"></div>
+  </div>
 
-<script src="app.js"></script>
+  <!-- Script de carga inicial -->
+  <script>
+    // Mostrar pantalla de carga por un breve tiempo
+    setTimeout(() => {
+      const loadingScreen = document.querySelector('.app-loading');
+      const appContainer = document.getElementById('app-container');
+      
+      // Simular verificación de autenticación con Supabase
+      const savedToken = localStorage.getItem('supabase.auth.token');
+      
+      if (savedToken) {
+        try {
+          const session = JSON.parse(savedToken);
+          if (session && session.access_token) {
+            // Si hay una sesión válida, intentar cargar el contenido principal
+            setTimeout(() => {
+              loadingScreen.style.opacity = '0';
+              setTimeout(() => {
+                loadingScreen.style.display = 'none';
+                appContainer.classList.remove('hidden');
+                // Intentar aplicar sesión
+                if (typeof aplicarSesion === 'function') {
+                  aplicarSesion();
+                }
+              }, 300);
+            }, 500);
+            return;
+          }
+        } catch (e) {
+          console.error('Error parseando token:', e);
+        }
+      }
+      
+      // Si no hay sesión válida, continuar con el flujo de inicio de sesión normal
+      setTimeout(() => {
+        loadingScreen.style.opacity = '0';
+        setTimeout(() => {
+          loadingScreen.style.display = 'none';
+          appContainer.classList.remove('hidden');
+        }, 300);
+      }, 500);
+    }, 1500);
+  </script>
+
+  <!-- Script principal de la aplicación -->
+  <script src="app.js"></script>
 </body>
 </html>
