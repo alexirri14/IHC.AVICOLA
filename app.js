@@ -444,6 +444,7 @@ function navegar(section) {
   currentSection = section;
   const mapLabels = {
     dashboard: 'Dashboard', galpones: 'Galpones', molino: 'Molino',
+    produccion: 'Producción',
     'almacen-huevos': 'Almacén de Huevos', 'almacen-insumos': 'Almacén de Insumos',
     compras: 'Compras', ventas: 'Ventas', reportes: 'Reportes', configuracion: 'Configuración',
   };
@@ -457,6 +458,7 @@ function navegar(section) {
     dashboard: renderDashboard,
     galpones: renderGalpones,
     molino: renderMolino,
+    produccion: renderProduccion,
     'almacen-huevos': renderAlmacenHuevos,
     'almacen-insumos': renderAlmacenInsumos,
     compras: renderCompras,
@@ -745,6 +747,63 @@ async function fabricarAlimento() {
   } catch { }
 }
 
+// --- PRODUCCIÓN ---
+async function renderProduccion() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
+  try {
+    const prod = await api('/produccion');
+    const galpones = await api('/galpones');
+    vaciar(c);
+
+    // Formulario
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Registrar Producción'])]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'prodFecha', type: 'date', value: hoy() })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Galpón']), crearEl('select', { id: 'prodGalpon' }, galpones.map(g => crearEl('option', { value: g.id }, [g.nombre])))]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Primera']), crearEl('input', { id: 'prodPrimera', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Segunda']), crearEl('input', { id: 'prodSegunda', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Gallinas Muertas']), crearEl('input', { id: 'prodMuertas', type: 'number', value: '0', min: '0' })]),
+      ]),
+      crearEl('div', { style: { marginTop: '12px' } }, [
+        crearEl('button', { className: 'btn btn-green', onClick: registrarProduccion }, ['🥚 Registrar']),
+      ]),
+    ]));
+
+    // Historial
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Producción'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Muertas'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, prod.length ? prod.slice(0,50).map(p => crearEl('tr', {}, [
+            crearEl('td', {}, [formatearFecha(p.fecha)]),
+            crearEl('td', {}, [p.galpon_id ? `Galpón #${p.galpon_id}` : '-']),
+            crearEl('td', {}, [num(p.primera)]),
+            crearEl('td', {}, [num(p.segunda)]),
+            crearEl('td', {}, [p.muertas || 0]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: '#999' } }, ['Sin registros'])])]),
+        ]),
+      ]),
+    ]));
+  } catch { c.innerHTML = '<div class="card">Error al cargar producción</div>'; }
+}
+
+async function registrarProduccion() {
+  const fecha = $('prodFecha')?.value || hoy();
+  const galpon_id = parseInt($('prodGalpon')?.value);
+  const primera = parseFloat($('prodPrimera')?.value) || 0;
+  const segunda = parseFloat($('prodSegunda')?.value) || 0;
+  const muertas = parseInt($('prodMuertas')?.value) || 0;
+  if (!galpon_id) return mostrarMensaje('Seleccione un galpón', 'warning');
+  if (primera <= 0 && segunda <= 0) return mostrarMensaje('Ingrese al menos 1 jaba', 'warning');
+  try {
+    await api('/produccion', { method: 'POST', body: { fecha, galpon_id, primera, segunda, muertas } });
+    mostrarMensaje('Producción registrada', 'success');
+    renderProduccion();
+  } catch {}
+}
+
 // --- ALMACEN HUEVOS ---
 async function renderAlmacenHuevos() {
   const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
@@ -797,31 +856,6 @@ async function renderAlmacenHuevos() {
     ]);
     if (stockSegunda > 0) c.appendChild(clasifCard);
 
-    // Producción
-    const prod = await api('/produccion');
-    c.appendChild(crearEl('div', { className: 'card' }, [
-      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Registrar Producción'])]),
-      crearEl('div', { className: 'form-grid' }, [
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'prodFecha', type: 'date', value: hoy() })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Galpón']), crearEl('select', { id: 'prodGalpon' })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Primera']), crearEl('input', { id: 'prodPrimera', type: 'number', value: '0', min: '0', step: '0.5' })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Segunda']), crearEl('input', { id: 'prodSegunda', type: 'number', value: '0', min: '0', step: '0.5' })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Gallinas Muertas']), crearEl('input', { id: 'prodMuertas', type: 'number', value: '0', min: '0' })]),
-      ]),
-      crearEl('div', { style: { marginTop: '12px' } }, [
-        crearEl('button', { className: 'btn btn-green', onClick: registrarProduccion }, ['🥚 Registrar']),
-      ]),
-    ]));
-
-    // Cargar galpones
-    try {
-      const galpones = await api('/galpones');
-      const sel = $('prodGalpon');
-      if (sel) {
-        sel.innerHTML = '<option value="">Seleccione...</option>' + galpones.map(g => `<option value="${g.id}">${g.nombre}</option>`).join('');
-      }
-    } catch {}
-
     // Movimientos recientes
     const movs = await api('/almacen/movimientos');
     c.appendChild(crearEl('div', { className: 'card' }, [
@@ -840,21 +874,6 @@ async function renderAlmacenHuevos() {
       ]),
     ]));
   } catch { c.innerHTML = '<div class="card">Error al cargar almacén</div>'; }
-}
-
-async function registrarProduccion() {
-  const fecha = $('prodFecha')?.value || hoy();
-  const galpon_id = parseInt($('prodGalpon')?.value);
-  const primera = parseFloat($('prodPrimera')?.value) || 0;
-  const segunda = parseFloat($('prodSegunda')?.value) || 0;
-  const muertas = parseInt($('prodMuertas')?.value) || 0;
-  if (!galpon_id) return mostrarMensaje('Seleccione un galpón', 'warning');
-  if (primera <= 0 && segunda <= 0) return mostrarMensaje('Ingrese al menos 1 jaba', 'warning');
-  try {
-    await api('/produccion', { method: 'POST', body: { fecha, galpon_id, primera, segunda, muertas } });
-    mostrarMensaje('Producción registrada', 'success');
-    renderAlmacenHuevos();
-  } catch {}
 }
 
 async function clasificarSegunda() {
