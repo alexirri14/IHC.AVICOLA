@@ -4,8 +4,8 @@ const qs = (el, sel) => (el || document).querySelector(sel);
 const qsa = (el, sel) => (el || document).querySelectorAll(sel);
 
 // ========== SUPABASE CONFIGURATION ==========
-const SUPABASE_URL = 'https://gldoiaecfjsaolfmonsr.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL';
+const SUPABASE_URL = 'https://sjyqskmhywykhzjgqegt.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_tpjoNczX5hYCDjYpHPng1A_9QZflFbM';
 
 // ========== SUPABASE CLIENT ==========
 class SupabaseClient {
