@@ -153,7 +153,6 @@ function diasAtras(n) {
   return fechaISO(d);
 }
 
-const API_BASE = '/api';
 let sesion = null;
 let currentSection = 'dashboard';
 let toasts = [];
@@ -280,53 +279,100 @@ async function doLogin() {
   } catch { }
 }
 
+function filtroFecha(desde, hasta) {
+  if (!desde || !hasta) return {};
+  return { and: `(fecha.gte.${desde},fecha.lte.${hasta})` };
+}
+
 async function api(path, options = {}) {
-  const url = API_BASE + path;
-  const config = {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  };
-  if (options.body && typeof options.body === 'object') config.body = JSON.stringify(options.body);
+  const c = getSupabaseAuth();
+  if (!c) throw new Error('No autenticado en Supabase');
+  const method = options.method || 'GET';
+  const body = options.body;
+  const urlParams = new URLSearchParams(path.split('?')[1] || '');
+  const cleanPath = path.split('?')[0];
 
   try {
-    const res = await fetch(url, config);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
-    return data;
-  } catch (e) {
-    if (e.message !== 'AbortError') mostrarMensaje(e.message, 'error');
-    throw e;
-  }
-}
+    if (method === 'GET') {
+      const tabs = { '/galpones':['galpones','id.asc'],'/formulas':['formulas','id.asc'],'/produccion':['produccion','fecha.desc'],'/insumos':['insumos','nombre.asc'],'/proveedores':['proveedores','nombre.asc'],'/clientes':['clientes','nombre.asc'],'/compras':['compras','fecha.desc'],'/ventas':['ventas','fecha.desc'] };
+      if (tabs[cleanPath]) { const [t,o]=tabs[cleanPath]; return await c.select(t, '*', {}, { order: o }); }
+      const m = cleanPath.match(/^\/(\w+)\/(\d+)$/);
+      if (m) { const r = await c.select(m[1], '*', { 'id': 'eq.'+m[2] }); return r[0] || null; }
 
-async function supabaseQuery(table, filters = {}, options = {}) {
-  const client = getSupabaseAuth();
-  if (!client) throw new Error('No autenticado en Supabase');
+      if (cleanPath === '/alertas') return await c.select('alertas', '*', { activo: 'eq.true' });
+      if (cleanPath === '/molino') return await c.select('produccion_molino', '*', {}, { order: 'fecha.desc' });
+      if (cleanPath === '/molino/stock-alimento') return await c.select('vista_stock_alimento');
+      if (cleanPath === '/almacen/huevos') { const [s,l]=await Promise.all([c.select('stock_huevos'),c.select('lotes_huevos')]); const o={}; s.forEach(x=>o[x.clase]=x.cantidad); return {stock:o,lotes:l}; }
+      if (cleanPath === '/almacen/movimientos') return await c.select('almacen_movimientos', '*', {}, { order: 'fecha.desc' });
+      if (cleanPath === '/configuracion/usuarios') return await c.select('usuarios');
+      if (cleanPath === '/configuracion/empresa') { const r = await c.select('empresa'); return r[0] || null; }
+      if (cleanPath === '/configuracion/parametros') return await c.select('parametros');
 
-  const params = { ...options, select: '*' };
-  if (Object.keys(filters).length > 0) {
-    Object.assign(params, filters);
-  }
+      if (cleanPath === '/reportes/dashboard') {
+        const [d,ps,vm,ca]=await Promise.all([c.select('vista_dashboard'),c.select('vista_produccion_semanal'),c.select('vista_ventas_mensual'),c.select('vista_consumo_alimento')]);
+        return {...(d[0]||{}),produccion_semanal:ps,ventas_mensual:vm,consumo_alimento:ca};
+      }
+      const rp = cleanPath.match(/^\/reportes\/(\w+)/);
+      if (rp) {
+        const tab=rp[1];
+        const desde = urlParams.get('desde') || $('repDesde')?.value || diasAtras(30);
+        const hasta = urlParams.get('hasta') || $('repHasta')?.value || hoy();
+        const ff = filtroFecha(desde, hasta);
+        if (tab==='produccion') return await c.select('produccion','*',ff,{order:'fecha.desc'});
+        if (tab==='ventas') return await c.select('ventas','*',ff,{order:'fecha.desc'});
+        if (tab==='inventario') { const [hue,i]=await Promise.all([c.select('stock_huevos'),c.select('insumos')]); return {huevos:hue,insumos:i}; }
+        if (tab==='molino') return await c.select('produccion_molino','*',ff,{order:'fecha.desc'});
+        if (tab==='galpones') { const g=await c.select('galpones'); return await Promise.all(g.map(async g=>{ const p=await c.select('produccion','*',{galpon_id:'eq.'+g.id,...ff},{order:'fecha.desc'}); const mu=p.reduce((s,x)=>s+(x.muertas||0),0); return {...g,produccion:p,mortalidad:mu}; })); }
+        if (tab==='mortalidad') return await c.select('produccion','*',{muertas:'gt.0',...ff},{order:'fecha.desc'});
+      }
+    }
 
-  return await client.select(table, '*', params);
-}
+    if (method === 'POST') {
+      const pts = { '/galpones':'galpones','/configuracion/usuarios':'usuarios' };
+      if (pts[cleanPath]) return await c.insert(pts[cleanPath], body);
 
-async function supabaseInsert(table, body) {
-  const client = getSupabaseAuth();
-  if (!client) throw new Error('No autenticado en Supabase');
-  return await client.insert(table, body);
-}
+      if (cleanPath === '/produccion') {
+        const r=await c.insert('produccion',{fecha:body.fecha,galpon_id:body.galpon_id,primera:body.primera||0,segunda:body.segunda||0,muertas:body.muertas||0});
+        if(body.muertas){ const g=await c.select('galpones','*',{'id':'eq.'+body.galpon_id}); if(g[0]) await c.update('galpones',{gallinas:Math.max(0,(g[0].gallinas||0)-body.muertas)},{'id':'eq.'+body.galpon_id}); }
+        if(body.primera>0) await c.rpc('sumar_stock',{p_clase:'Primera',p_cantidad:body.primera});
+        if(body.segunda>0) await c.rpc('sumar_stock',{p_clase:'Segunda',p_cantidad:body.segunda});
+        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Ingreso',detalle:'Producción galpón '+body.galpon_id,primera:body.primera||0,segunda:body.segunda||0});
+        return r;
+      }
+      if (cleanPath === '/molino/producir') {
+        const r=await c.insert('produccion_molino',{fecha:body.fecha,formula_id:body.formula_id,tandas:body.tandas,kg_producidos:body.tandas*40,costo:body.tandas*50});
+        await c.rpc('distribuir_alimento',{p_kg:body.tandas*40});
+        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Ingreso',detalle:'Producción molino',primera:0,segunda:0});
+        return r;
+      }
+      if (cleanPath === '/compras') {
+        const total=body.cantidad*body.precio_unitario;
+        const r=await c.insert('compras',{...body,total});
+        await c.rpc('sumar_insumo',{p_id:body.insumo_id,p_cantidad:body.cantidad,p_fecha:body.fecha});
+        return r;
+      }
+      if (cleanPath === '/ventas') {
+        const precios={primera:4.50,segunda:3.50,pardo:5.00,jumbo:6.00,sucio:2.50,limpieza:3.00,quinados:1.50};
+        let tj=0,ti=0;
+        for(const k of Object.keys(precios)){ const v=parseFloat(body[k])||0; tj+=v; ti+=v*precios[k]; }
+        const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*18,total:ti});
+        for(const k of Object.keys(precios)){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); }
+        return r;
+      }
+    }
 
-async function supabaseUpdate(table, body, filters) {
-  const client = getSupabaseAuth();
-  if (!client) throw new Error('No autenticado en Supabase');
-  return await client.update(table, body, filters);
-}
-
-async function supabaseDelete(table, filters) {
-  const client = getSupabaseAuth();
-  if (!client) throw new Error('No autenticado en Supabase');
-  return await client.delete(table, filters);
+    if (method === 'PUT') {
+      const m=cleanPath.match(/^\/(.+)\/(\d+)$/);
+      if(m){
+        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios' };
+        const table = pathToTable[m[1]];
+        if(table) return await c.update(table, body, {'id':'eq.'+m[2]});
+      }
+      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:v}); await c.rpc('sumar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); } return {success:true}; }
+      if(cleanPath==='/configuracion/empresa') return await c.update('empresa',body,{'id':'eq.1'});
+    }
+    throw new Error('Ruta no implementada: '+method+' '+cleanPath);
+  } catch(e){ mostrarMensaje('Error: '+e.message,'error'); throw e; }
 }
 
 function mostrarMensaje(msg, tipo = 'info') {
