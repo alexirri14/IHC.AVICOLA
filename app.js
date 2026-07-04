@@ -352,7 +352,9 @@ async function api(path, options = {}) {
         return r;
       }
       if (cleanPath === '/ventas') {
-        const precios={primera:4.50,segunda:3.50,pardo:5.00,jumbo:6.00,sucio:2.50,limpieza:3.00,quinados:1.50};
+        const params=await c.select('parametros');
+        const precios={primera:4.50,pardo:5.00,jumbo:6.00};
+        params.forEach(p=>{if(p.clave.startsWith('precio_')){const k=p.clave.replace('precio_','');if(precios[k]!==undefined)precios[k]=parseFloat(p.valor)||precios[k];}});
         let tj=0,ti=0;
         for(const k of Object.keys(precios)){ const v=parseFloat(body[k])||0; tj+=v; ti+=v*precios[k]; }
         const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*18,total:ti});
@@ -364,7 +366,7 @@ async function api(path, options = {}) {
     if (method === 'PUT') {
       const m=cleanPath.match(/^\/(.+)\/(\d+)$/);
       if(m){
-        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios' };
+        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios', 'configuracion/parametros':'parametros' };
         const table = pathToTable[m[1]];
         if(table) return await c.update(table, body, {'id':'eq.'+m[2]});
       }
@@ -957,13 +959,19 @@ async function registrarCompra() {
 async function renderVentas() {
   const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
   try {
-    const [ventas, clientes] = await Promise.all([
-      api('/ventas'), api('/clientes'),
+    const [ventas, clientes, params] = await Promise.all([
+      api('/ventas'), api('/clientes'), api('/configuracion/parametros'),
     ]);
     vaciar(c);
 
-    // Precios base
-    const precios = { primera: 4.50, segunda: 3.50, pardo: 5.00, jumbo: 6.00, sucio: 2.50, limpieza: 3.00, quinados: 1.50 };
+    const precios = { primera: 4.50, pardo: 5.00, jumbo: 6.00 };
+    params.forEach(p => {
+      if (p.clave.startsWith('precio_')) {
+        const key = p.clave.replace('precio_', '');
+        if (precios[key] !== undefined) precios[key] = parseFloat(p.valor) || precios[key];
+      }
+    });
+    ventaPrecios = { ...precios };
 
     c.appendChild(crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Nueva Venta'])]),
@@ -976,13 +984,10 @@ async function renderVentas() {
       ]),
       crearEl('div', { className: 'form-grid', style: { marginTop: '8px' } }, [
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Primera (S/ ' + precios.primera.toFixed(2) + ')']), crearEl('input', { id: 'ventaPrimera', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Segunda (S/ ' + precios.segunda.toFixed(2) + ')']), crearEl('input', { id: 'ventaSegunda', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Pardo (S/ ' + precios.pardo.toFixed(2) + ')']), crearEl('input', { id: 'ventaPardo', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jumbo (S/ ' + precios.jumbo.toFixed(2) + ')']), crearEl('input', { id: 'ventaJumbo', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Sucio (S/ ' + precios.sucio.toFixed(2) + ')']), crearEl('input', { id: 'ventaSucio', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Limpieza (S/ ' + precios.limpieza.toFixed(2) + ')']), crearEl('input', { id: 'ventaLimpieza', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Quiñados (S/ ' + precios.quinados.toFixed(2) + ')']), crearEl('input', { id: 'ventaQuinados', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
       ]),
+      crearEl('div', { style: { marginTop: '8px', fontSize: '12px', color: 'var(--text3)' } }, ['Los precios se configuran en Configuración → Parámetros']),
       crearEl('div', { id: 'ventaResumen', style: { marginTop: '12px', padding: '12px', background: 'var(--primary-light)', borderRadius: '8px', display: 'flex', gap: '24px', fontSize: '14px' } }, [
         crearEl('span', {}, ['Total Jabas: <strong id="ventaTotalJabas">0.00</strong>']),
         crearEl('span', {}, ['Peso: <strong id="ventaPeso">0.00</strong> kg']),
@@ -1012,14 +1017,15 @@ async function renderVentas() {
   } catch { c.innerHTML = '<div class="card">Error al cargar ventas</div>'; }
 }
 
+let ventaPrecios = { primera: 4.50, pardo: 5.00, jumbo: 6.00 };
+
 function calcVenta() {
-  const precios = { primera: 4.50, segunda: 3.50, pardo: 5.00, jumbo: 6.00, sucio: 2.50, limpieza: 3.00, quinados: 1.50 };
-  const campos = ['primera','segunda','pardo','jumbo','sucio','limpieza','quinados'];
+  const campos = ['primera','pardo','jumbo'];
   let totalJabas = 0, totalImporte = 0;
   campos.forEach(c => {
     const v = parseFloat($('venta'+c.charAt(0).toUpperCase()+c.slice(1))?.value) || 0;
     totalJabas += v;
-    totalImporte += v * (precios[c] || 0);
+    totalImporte += v * (ventaPrecios[c] || 0);
   });
   const peso = totalJabas * 18;
   $('ventaTotalJabas').innerHTML = num(totalJabas);
@@ -1031,7 +1037,7 @@ async function registrarVenta() {
   const fecha = $('ventaFecha')?.value || hoy();
   const cliente_id = parseInt($('ventaCliente')?.value);
   if (!cliente_id) return mostrarMensaje('Seleccione un cliente', 'warning');
-  const campos = ['primera','segunda','pardo','jumbo','sucio','limpieza','quinados'];
+  const campos = ['primera','pardo','jumbo'];
   const body = { fecha, cliente_id, cliente_nombre: $('ventaCliente')?.selectedOptions[0]?.text || '' };
   campos.forEach(c => {
     body[c] = parseFloat($('venta'+c.charAt(0).toUpperCase()+c.slice(1))?.value) || 0;
@@ -1143,7 +1149,15 @@ async function renderConfiguracion() {
       const params = await api('/configuracion/parametros');
       c.appendChild(crearEl('div', { className: 'card' }, [
         crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Parámetros del Sistema'])]),
-        crearEl('div', { className: 'table-wrap' }, [crearTabla(['Clave','Valor','Descripción','Acción'], params.map(p => [p.clave, p.valor, p.descripcion||'', '—']))]),
+        crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Clave','Valor','Descripción','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, params.map(p => crearEl('tr', {}, [
+            crearEl('td', { style: { fontWeight: 500 } }, [p.clave]),
+            crearEl('td', {}, [p.valor]),
+            crearEl('td', { style: { color: 'var(--text2)', fontSize: '12px' } }, [p.descripcion||'']),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => editarParametro(p) }, ['✏ Editar'])]),
+          ]))),
+        ])]),
       ]));
     } catch {}
   }
@@ -1160,6 +1174,17 @@ async function guardarEmpresa() {
     await api('/configuracion/empresa', { method: 'PUT', body });
     mostrarMensaje('Datos guardados', 'success');
   } catch {}
+}
+
+async function editarParametro(p) {
+  abrirModal('Editar: ' + p.clave, ['Guardar'], async (data) => {
+    await api('/configuracion/parametros/' + p.id, { method: 'PUT', body: { valor: data.valor } });
+    renderConfiguracion();
+  }, [
+    { label: 'Clave', type: 'static', value: p.clave },
+    { label: 'Valor', type: 'text', value: p.valor, required: true },
+    { label: 'Descripción', type: 'static', value: p.descripcion || '' },
+  ], renderConfiguracion);
 }
 
 function modalUsuario(u) {
