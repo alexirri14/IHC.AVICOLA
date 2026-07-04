@@ -179,13 +179,33 @@ CREATE TABLE IF NOT EXISTS usuarios (
   created_at timestamptz DEFAULT now()
 );
 
--- Lotes de huevos (para almacenamiento)
-CREATE TABLE IF NOT EXISTS lotes_huevos (
+-- Consumo diario de alimento por galpón
+CREATE TABLE IF NOT EXISTS consumo_alimento (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  clase text NOT NULL,
-  cantidad_disponible numeric(10,2) DEFAULT 0,
-  created_at timestamptz DEFAULT now()
+  fecha date NOT NULL,
+  galpon_id bigint REFERENCES galpones(id),
+  kg_consumidos numeric(10,2) DEFAULT 0,
+  sacos_50kg numeric(10,2) DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (fecha, galpon_id)
 );
+
+-- RPC: Registrar consumo diario y descontar del stock del galpón
+CREATE OR REPLACE FUNCTION registrar_consumo(p_fecha date, p_galpon_id bigint, p_sacos numeric)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+  v_kg numeric;
+  v_kg_diff numeric;
+  v_anterior numeric;
+BEGIN
+  v_kg := p_sacos * 50;
+  SELECT sacos_50kg INTO v_anterior FROM consumo_alimento WHERE fecha = p_fecha AND galpon_id = p_galpon_id;
+  INSERT INTO consumo_alimento (fecha, galpon_id, kg_consumidos, sacos_50kg)
+    VALUES (p_fecha, p_galpon_id, v_kg, p_sacos)
+    ON CONFLICT (fecha, galpon_id) DO UPDATE SET kg_consumidos = v_kg, sacos_50kg = p_sacos;
+  v_kg_diff := v_kg - COALESCE(v_anterior * 50, 0);
+  UPDATE galpones SET alimento_kg = GREATEST(0, alimento_kg - v_kg_diff) WHERE id = p_galpon_id;
+END $$;
 
 -- 2. VISTAS PARA REPORTES
 -- ============================================================
@@ -294,12 +314,12 @@ ALTER TABLE clientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ventas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE almacen_movimientos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clasificacion_huevos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE consumo_alimento ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_huevos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alertas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE empresa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parametros ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE lotes_huevos ENABLE ROW LEVEL SECURITY;
 
 -- Políticas: permitir todo a usuarios autenticados
 DO $$
@@ -309,8 +329,8 @@ BEGIN
   FOR tbl IN SELECT unnest(ARRAY[
     'galpones','produccion','formulas','produccion_molino','insumos',
     'proveedores','compras','clientes','ventas','almacen_movimientos',
-    'clasificacion_huevos','stock_huevos','alertas','empresa',
-    'parametros','usuarios','lotes_huevos'
+    'clasificacion_huevos','consumo_alimento','stock_huevos','alertas','empresa',
+    'parametros','usuarios'
   ])
   LOOP
     EXECUTE format(
@@ -322,8 +342,17 @@ END $$;
 
 -- 4. DATOS INICIALES
 -- ============================================================
+INSERT INTO galpones (nombre, gallinas) VALUES
+  ('Galpón 4', 12771),
+  ('Galpón 5', 15741),
+  ('Galpón 6', 13891),
+  ('Galpón 8', 13663),
+  ('Galpón Automático', 21801)
+ON CONFLICT DO NOTHING;
+
 INSERT INTO stock_huevos (clase, cantidad) VALUES
-  ('Primera', 0), ('Segunda', 0)
+  ('Primera', 0), ('Segunda', 0),
+  ('Pardo', 0), ('Jumbo', 0), ('Sucio', 0), ('Quiñados', 0)
 ON CONFLICT (clase) DO NOTHING;
 
 INSERT INTO empresa (nombre, ruc, direccion, telefono) VALUES

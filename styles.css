@@ -105,7 +105,7 @@ body {
 .stat-card .stat-value { font-size: 20px; font-weight: 700; }
 
 .bg-green { background: #e6f4ea; } .bg-red { background: #fce8e6; }
-.bg-orange { background: #fef7e0; } .bg-blue { background: #e8f0fe; }
+.bg-orange { background: #fef7e0; } .bg-blue { background: #e8f0fe; } .bg-purple { background: #f3e8ff; }
 
 /* TABLES */
 .table-wrap { overflow-x: auto; }
@@ -194,7 +194,7 @@ tr:hover td { background: #f8f9fa; }
 }
 .chip-green { background: #e6f4ea; color: #1e7e34; }
 .chip-red { background: #fce8e6; color: #c5221f; }
-.chip-orange { background: #fef7e0; color: #e37400; }
+.chip-orange { background: #fef7e0; color: #e37400; } .chip-blue { background: #e8f0fe; color: #1a73e8; }
 
 /* RESPONSIVE */
 @media (max-width: 768px) {

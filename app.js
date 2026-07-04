@@ -300,9 +300,10 @@ async function api(path, options = {}) {
       if (m) { const r = await c.select(m[1], '*', { 'id': 'eq.'+m[2] }); return r[0] || null; }
 
       if (cleanPath === '/alertas') return await c.select('alertas', '*', { activo: 'eq.true' });
+      if (cleanPath === '/consumo') return await c.select('consumo_alimento', '*', {}, { order: 'fecha.desc' });
       if (cleanPath === '/molino') return await c.select('produccion_molino', '*', {}, { order: 'fecha.desc' });
       if (cleanPath === '/molino/stock-alimento') return await c.select('vista_stock_alimento');
-      if (cleanPath === '/almacen/huevos') { const [s,l]=await Promise.all([c.select('stock_huevos'),c.select('lotes_huevos')]); const o={}; s.forEach(x=>o[x.clase]=x.cantidad); return {stock:o,lotes:l}; }
+      if (cleanPath === '/almacen/huevos') { const s=await c.select('stock_huevos'); const o={}; s.forEach(x=>o[x.clase]=x.cantidad); return {stock:o}; }
       if (cleanPath === '/almacen/movimientos') return await c.select('almacen_movimientos', '*', {}, { order: 'fecha.desc' });
       if (cleanPath === '/configuracion/usuarios') return await c.select('usuarios');
       if (cleanPath === '/configuracion/empresa') { const r = await c.select('empresa'); return r[0] || null; }
@@ -367,8 +368,9 @@ async function api(path, options = {}) {
           });
         });
         const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*pesoJaba,total:ti});
-        const mapaStock={primera:'Primera',pardo:'Segunda',jumbo:'Segunda',sucio:'Segunda',quinados:'Segunda'};
-        for(const k of Object.keys(mapaStock)){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:mapaStock[k],p_cantidad:v}); }
+        for(const k of ['primera','pardo','jumbo','sucio','quinados']){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); }
+        const detMov = Object.entries({primera:body.primera,pardo:body.pardo,jumbo:body.jumbo,sucio:body.sucio,quinados:body.quinados}).filter(([,v])=>parseFloat(v)>0).map(([k,v])=>`${k}: ${v}`).join(', ');
+        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Venta',detalle:'Cliente: '+(body.cliente_nombre||'')+' | '+detMov,primera:parseFloat(body.primera||0),segunda:0});
         return r;
       }
     }
@@ -380,7 +382,8 @@ async function api(path, options = {}) {
         const table = pathToTable[m[1]];
         if(table) return await c.update(table, body, {'id':'eq.'+m[2]});
       }
-      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); } return {success:true}; }
+      if(cleanPath==='/consumo') return await c.rpc('registrar_consumo',{p_fecha:body.fecha,p_galpon_id:body.galpon_id,p_sacos:body.sacos});
+      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ const destino = k==='limpieza'?'Primera':k.charAt(0).toUpperCase()+k.slice(1); await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:v}); await c.rpc('sumar_stock',{p_clase:destino,p_cantidad:v}); await c.insert('almacen_movimientos',{fecha,tipo:'Clasificación',detalle:k+' → '+destino+' ('+v+' jab)',primera:k==='limpieza'?v:0,segunda:k!=='limpieza'?v:0}); } return {success:true}; }
       if(cleanPath==='/configuracion/empresa') return await c.update('empresa',body,{'id':'eq.1'});
     }
     throw new Error('Ruta no implementada: '+method+' '+cleanPath);
@@ -579,7 +582,9 @@ function crearChartCard(titulo, datos, label, color) {
 async function renderGalpones() {
   const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
   try {
-    const galpones = await api('/galpones');
+    const [galpones, consumos] = await Promise.all([
+      api('/galpones'), api('/consumo'),
+    ]);
     vaciar(c);
 
     const header = crearEl('div', { className: 'card-header' }, [
@@ -590,35 +595,100 @@ async function renderGalpones() {
     ]);
     c.appendChild(crearEl('div', { className: 'card' }, [header]));
 
-    const grid = crearEl('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' } });
+    // Resumen de alimento
+    const totalSacos = galpones.reduce((s, g) => s + Math.floor((g.alimento_kg || 0) / 50), 0);
+    const totalGallinas = galpones.reduce((s, g) => s + (g.gallinas || 0), 0);
+    c.appendChild(crearEl('div', { style: { display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap', fontSize: '13px' } }, [
+      crearEl('span', { className: 'chip chip-blue' }, [`🐔 ${totalGallinas.toLocaleString()} gallinas`]),
+      crearEl('span', { className: 'chip chip-green' }, [`🌾 ${totalSacos} sacos totales`]),
+    ]));
+    if (totalSacos < 30) {
+      c.appendChild(crearEl('div', { className: 'card', style: { background: '#fff3cd', border: '1px solid #ffc107', padding: '12px', fontSize: '13px', fontWeight: 600 } }, [
+        `⚠️ Alerta: Stock total de alimento bajo (${totalSacos} sacos). Programar producción en Molino.`,
+      ]));
+    }
+
+    const grid = crearEl('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' } });
     for (const g of galpones) {
+      const edadCalc = g.fecha_ingreso ? Math.floor((Date.now() - new Date(g.fecha_ingreso + 'T12:00:00').getTime()) / (86400000)) : g.edad_lote || 0;
       const sacos = Math.floor((g.alimento_kg || 0) / 50);
       const consSacos = g.consumo_diario || 0;
       const diasAlimento = consSacos > 0 ? Math.floor(sacos / consSacos) : 99;
-      const card = crearEl('div', { className: 'card', style: { cursor: 'pointer' }, onClick: () => modalGalponDetalle(g) }, [
-        crearEl('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' } }, [
-          crearEl('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
+      const alerta = diasAlimento < 3 ? '🔴' : diasAlimento < 7 ? '⚠️' : '✅';
+      const hoy = consumos.find(c => c.galpon_id === g.id && c.fecha === new Date().toISOString().slice(0,10));
+      const card = crearEl('div', { className: 'card' }, [
+        crearEl('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }, onClick: () => modalGalponDetalle(g), onDblclick: undefined }, [
+          crearEl('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' } }, [
             crearEl('span', { style: { fontSize: '20px' } }, ['🐔']),
             crearEl('h4', { style: { fontSize: '15px', fontWeight: 600 } }, [g.nombre]),
           ]),
           crearEl('span', { className: g.estado === 'Activo' ? 'chip chip-green' : 'chip chip-orange' }, [g.estado || 'Activo']),
         ]),
-        crearEl('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text2)' } }, [
-          crearEl('div', {}, [`🟢 ${(g.gallinas || 0).toLocaleString()} gallinas`]),
-          crearEl('div', {}, [`📅 ${g.edad_lote || 0} días`]),
-          crearEl('div', {}, [`🥚 Prod: ${num(g.produccion_promedio)} jabas/día`]),
-          crearEl('div', {}, [`🌾 Alim: ${sacos} sacos`]),
-          crearEl('div', {}, [`⏱ ${diasAlimento >= 30 ? '✅+' : diasAlimento >= 7 ? '✅' : diasAlimento >= 3 ? '⚠️' : '🔴'} ${diasAlimento} días`]),
+        crearEl('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px', color: 'var(--text2)' } }, [
+          crearEl('div', {}, [`🟉 ${(g.gallinas || 0).toLocaleString()} gallinas`]),
+          crearEl('div', {}, [`📅 ${edadCalc} días`]),
+          crearEl('div', {}, [`🥚 ${num(g.produccion_promedio)} jab/día`]),
+          crearEl('div', {}, [`🌾 ${sacos} sacos (${alerta} ${diasAlimento}d)`]),
+        ]),
+        crearEl('div', { style: { marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center' } }, [
+          crearEl('input', { id: 'consumo_'+g.id, type: 'number', value: hoy?.sacos_50kg || '', min: '0', step: '1', style: { width: '70px', padding: '4px 6px', fontSize: '13px' }, placeholder: 'Sac.' }),
+          crearEl('button', { className: 'btn btn-sm ' + (hoy ? 'btn-outline' : 'btn-primary'), style: { fontSize: '12px', padding: '4px 10px' }, onClick: () => registrarConsumo(g) }, [hoy ? 'Actualizar' : '🌾 Registrar']),
+          crearEl('span', { style: { fontSize: '11px', color: 'var(--text3)' } }, ['= ' + num((g.consumo_diario || 0)) + ' sac/día estimado']),
         ]),
       ]);
       grid.appendChild(card);
     }
     c.appendChild(grid);
+
+    // Historial de consumo
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Consumo de Alimento'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Sacos (50kg)','Kg','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, consumos.length ? consumos.slice(0,30).map(con => {
+            const galp = galpones.find(g => g.id === con.galpon_id);
+            return crearEl('tr', {}, [
+              crearEl('td', {}, [formatearFecha(con.fecha)]),
+              crearEl('td', {}, [galp ? galp.nombre : `Galpón #${con.galpon_id}`]),
+              crearEl('td', {}, [num(con.sacos_50kg)]),
+              crearEl('td', {}, [num(con.kg_consumidos)]),
+              crearEl('td', {}, [
+                con.fecha === hoy() ? crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px', padding: '2px 6px' }, onClick: () => eliminarConsumo(con) }, ['Eliminar']) : null,
+              ]),
+            ]);
+          }) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+        ]),
+      ]),
+    ]));
   } catch { c.innerHTML = '<div class="card">Error al cargar galpones</div>'; }
 }
 
+async function registrarConsumo(g) {
+  const input = $('consumo_'+g.id);
+  const sacos = parseFloat(input?.value);
+  if (!sacos || sacos <= 0) return mostrarMensaje('Ingrese cantidad de sacos', 'warning');
+  try {
+    await api('/consumo', { method: 'PUT', body: { fecha: hoy(), galpon_id: g.id, sacos } });
+    mostrarMensaje(`Consumo registrado: ${sacos} sacos en ${g.nombre}`, 'success');
+    renderGalpones();
+  } catch {}
+}
+
+async function eliminarConsumo(con) {
+  if (!confirm('¿Eliminar este registro de consumo? Se restaurará el alimento.')) return;
+  try {
+    const c = getSupabaseAuth();
+    const gal = await c.select('galpones', '*', { 'id': 'eq.'+con.galpon_id });
+    if (gal[0]) await c.update('galpones', { 'alimento_kg': (gal[0].alimento_kg || 0) + (con.kg_consumidos || 0) }, { 'id': 'eq.'+con.galpon_id });
+    await c.delete('consumo_alimento', { 'id': 'eq.'+con.id });
+    mostrarMensaje('Registro eliminado y alimento restaurado', 'success');
+    renderGalpones();
+  } catch {}
+}
+
 function modalGalpon(g) {
-  abrirModal('Galpón', [g ? 'Guardar' : 'Crear'], (data) => {
+  abrirModal('Galpón', [g ? 'Guardar' : 'Crear'], (action, data) => {
     if (g) return api('/galpones/' + g.id, { method: 'PUT', body: data });
     return api('/galpones', { method: 'POST', body: data });
   }, [
@@ -634,10 +704,9 @@ function modalGalpon(g) {
 async function modalGalponDetalle(g) {
   let data;
   try { data = await api('/galpones/' + g.id); } catch { data = g; }
-  abrirModal(`📋 ${data.nombre}`, ['Cerrar', 'Editar'], (action) => {
-    if (action === 'Editar') { modalGalpon(data); return Promise.resolve(); }
-    return Promise.resolve();
-  }, [
+  const consumos = await api('/consumo');
+  const hist = consumos.filter(c => c.galpon_id === g.id).slice(0,10);
+  const fields = [
     { label: 'Estado', type: 'static', value: data.estado || 'Activo' },
     { label: 'Gallinas Vivas', type: 'static', value: (data.gallinas || 0).toLocaleString() },
     { label: 'Capacidad', type: 'static', value: (data.capacidad || 0).toLocaleString() },
@@ -646,7 +715,21 @@ async function modalGalponDetalle(g) {
     { label: 'Alimento', type: 'static', value: `${Math.floor((data.alimento_kg||0)/50)} sacos (${num(data.alimento_kg)} kg)` },
     { label: 'Consumo Diario', type: 'static', value: `${num(data.consumo_diario)} sacos (${num((data.consumo_diario||0)*50)} kg)` },
     { label: 'Prod. Promedio', type: 'static', value: `${num(data.produccion_promedio)} jabas/día` },
-  ], null, '480px');
+  ];
+  if (hist.length) {
+    fields.push({ label: 'Últimos consumos', type: 'custom', render: () => crearEl('table', { style: { width: '100%', fontSize: '12px' } }, [
+      crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Sacos','Kg'].map(h => crearEl('th', {}, [h])))]),
+      crearEl('tbody', {}, hist.map(c => crearEl('tr', {}, [
+        crearEl('td', {}, [formatearFecha(c.fecha)]),
+        crearEl('td', {}, [num(c.sacos_50kg)]),
+        crearEl('td', {}, [num(c.kg_consumidos)]),
+      ]))),
+    ]) });
+  }
+  abrirModal(`📋 ${data.nombre}`, ['Cerrar', 'Editar'], (action, formData) => {
+    if (action === 'Editar') { modalGalpon(data); return Promise.resolve(); }
+    return Promise.resolve();
+  }, fields, null, '480px');
 }
 
 // --- MOLINO ---
@@ -760,7 +843,7 @@ async function renderProduccion() {
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Registrar Producción'])]),
       crearEl('div', { className: 'form-grid' }, [
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'prodFecha', type: 'date', value: hoy() })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Galpón']), crearEl('select', { id: 'prodGalpon' }, galpones.map(g => crearEl('option', { value: g.id }, [g.nombre])))]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Galpón']), crearEl('select', { id: 'prodGalpon' }, [crearEl('option', { value: '' }, ['Seleccione...']), ...galpones.map(g => crearEl('option', { value: g.id }, [g.nombre]))])]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Primera']), crearEl('input', { id: 'prodPrimera', type: 'number', value: '0', min: '0', step: '0.5' })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Segunda']), crearEl('input', { id: 'prodSegunda', type: 'number', value: '0', min: '0', step: '0.5' })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Gallinas Muertas']), crearEl('input', { id: 'prodMuertas', type: 'number', value: '0', min: '0' })]),
@@ -813,15 +896,36 @@ async function renderAlmacenHuevos() {
 
     // Stock actual
     const stock = data.stock || {};
+    const gruposStock = [
+      { label: 'Primera', clase: 'Primera', bg: 'bg-blue' },
+      { label: 'Segunda (sin clasificar)', clase: 'Segunda', bg: 'bg-orange' },
+    ];
+    const subTipos = [
+      { label: 'Pardo', clase: 'Pardo', bg: 'bg-purple' },
+      { label: 'Jumbo', clase: 'Jumbo', bg: 'bg-purple' },
+      { label: 'Sucio', clase: 'Sucio', bg: 'bg-purple' },
+      { label: 'Quiñados', clase: 'Quiñados', bg: 'bg-purple' },
+    ];
     let totalJabas = 0;
     const statsGrid = crearEl('div', { className: 'stats-grid' });
-    Object.entries(stock).forEach(([clase, cant]) => {
-      const c = parseFloat(cant) || 0;
+    gruposStock.forEach(({label, clase, bg}) => {
+      const c = parseFloat(stock[clase] || 0);
       totalJabas += c;
       statsGrid.appendChild(crearEl('div', { className: 'stat-card' }, [
-        crearEl('div', { className: 'stat-icon bg-blue' }, ['🥚']),
+        crearEl('div', { className: `stat-icon ${bg}` }, ['🥚']),
         crearEl('div', { className: 'stat-info' }, [
-          crearEl('div', { className: 'stat-label' }, [clase]),
+          crearEl('div', { className: 'stat-label' }, [label]),
+          crearEl('div', { className: 'stat-value' }, [num(c)]),
+        ]),
+      ]));
+    });
+    subTipos.forEach(({label, clase, bg}) => {
+      const c = parseFloat(stock[clase] || 0);
+      totalJabas += c;
+      statsGrid.appendChild(crearEl('div', { className: 'stat-card', style: { opacity: 0.85 } }, [
+        crearEl('div', { className: `stat-icon ${bg}` }, ['🔹']),
+        crearEl('div', { className: 'stat-info' }, [
+          crearEl('div', { className: 'stat-label' }, [label]),
           crearEl('div', { className: 'stat-value' }, [num(c)]),
         ]),
       ]));
@@ -838,6 +942,7 @@ async function renderAlmacenHuevos() {
     // Clasificación
     const stockSegunda = parseFloat(stock['Segunda'] || 0);
     const clasifCard = crearEl('div', { className: 'card' }, [
+      crearEl('span', { id: 'clasifStockSegunda', 'data-stock': stockSegunda, style: { display: 'none' } }),
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Clasificar Segunda'])]),
       crearEl('div', { style: { marginBottom: '12px' } }, [
         crearEl('span', { className: 'chip chip-orange' }, [`Disponible: ${num(stockSegunda)} jabas`]),
@@ -885,6 +990,8 @@ async function clasificarSegunda() {
   const quinados = parseFloat($('clasifQuinados')?.value) || 0;
   const total = pardo + jumbo + sucio + limpieza + quinados;
   if (total <= 0) return mostrarMensaje('Ingrese al menos 1 jaba clasificada', 'warning');
+  const stockSegunda = parseFloat($('clasifStockSegunda')?.getAttribute('data-stock') || 0);
+  if (total > stockSegunda) return mostrarMensaje(`Solo hay ${num(stockSegunda)} jabas de Segunda disponibles`, 'warning');
   try {
     await api('/almacen/clasificar', { method: 'PUT', body: { fecha, pardo, jumbo, sucio, limpieza, quinados } });
     mostrarMensaje('Clasificación guardada', 'success');
@@ -1019,6 +1126,12 @@ async function renderVentas() {
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg PRIMERA']), crearEl('input', { id: 'precioPrimera', type: 'number', value: '4.50', min: '0', step: '0.01', onInput: calcVenta })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg SEGUNDA (Pardo, Jumbo, Sucio, Quiñados)']), crearEl('input', { id: 'precioSegunda', type: 'number', value: '3.50', min: '0', step: '0.01', onInput: calcVenta })]),
       ]),
+      crearEl('div', { style: { marginTop: '8px', display: 'flex', gap: '12px', alignItems: 'center' } }, [
+        crearEl('label', { style: { fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' } }, [
+          crearEl('input', { id: 'ventaMostrarSucio', type: 'checkbox', onchange: toggleVentaSucio }),
+          ' Incluir Sucio / Quiñados',
+        ]),
+      ]),
       crearEl('div', { className: 'table-wrap', style: { marginTop: '8px' } }, [crearEl('table', {}, [
         crearEl('thead', {}, [crearEl('tr', {}, ['Categoría','Tipo','Jabas','Subtotal'].map(h => crearEl('th', {}, [h])))]),
         crearEl('tbody', {}, [
@@ -1028,18 +1141,33 @@ async function renderVentas() {
             crearEl('td', {}, [crearEl('input', { id: 'venta_primera', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
             crearEl('td', { id: 'ventaSub_primera', style: { fontWeight: 600 } }, ['S/ 0.00']),
           ]),
-          ...['pardo','jumbo','sucio','quinados'].map((k,i) => crearEl('tr', {}, [
-            i === 0 ? crearEl('td', { rowspan: '4', style: { fontWeight: 600, background: 'var(--orange-light)' } }, ['SEGUNDA']) : null,
-            crearEl('td', { style: { fontWeight: 500 } }, [{pardo:'Pardo',jumbo:'Jumbo',sucio:'Sucio',quinados:'Quiñados'}[k]]),
-            crearEl('td', {}, [crearEl('input', { id: 'venta_'+k, type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
-            crearEl('td', { id: 'ventaSub_'+k, style: { fontWeight: 600 } }, ['S/ 0.00']),
-          ])),
+          crearEl('tr', { id: 'ventaRowPardo' }, [
+            crearEl('td', { id: 'ventaSegundaLabel', rowspan: '2', style: { fontWeight: 600, background: 'var(--orange-light)' } }, ['SEGUNDA']),
+            crearEl('td', { style: { fontWeight: 500 } }, ['Pardo']),
+            crearEl('td', {}, [crearEl('input', { id: 'venta_pardo', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
+            crearEl('td', { id: 'ventaSub_pardo', style: { fontWeight: 600 } }, ['S/ 0.00']),
+          ]),
+          crearEl('tr', { id: 'ventaRowJumbo' }, [
+            crearEl('td', { style: { fontWeight: 500 } }, ['Jumbo']),
+            crearEl('td', {}, [crearEl('input', { id: 'venta_jumbo', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
+            crearEl('td', { id: 'ventaSub_jumbo', style: { fontWeight: 600 } }, ['S/ 0.00']),
+          ]),
+          crearEl('tr', { id: 'ventaRowSucio', style: { display: 'none' } }, [
+            crearEl('td', { style: { fontWeight: 500 } }, ['Sucio']),
+            crearEl('td', {}, [crearEl('input', { id: 'venta_sucio', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
+            crearEl('td', { id: 'ventaSub_sucio', style: { fontWeight: 600 } }, ['S/ 0.00']),
+          ]),
+          crearEl('tr', { id: 'ventaRowQuinados', style: { display: 'none' } }, [
+            crearEl('td', { style: { fontWeight: 500 } }, ['Quiñados']),
+            crearEl('td', {}, [crearEl('input', { id: 'venta_quinados', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
+            crearEl('td', { id: 'ventaSub_quinados', style: { fontWeight: 600 } }, ['S/ 0.00']),
+          ]),
         ]),
       ])]),
       crearEl('div', { id: 'ventaResumen', style: { marginTop: '12px', padding: '12px', background: 'var(--primary-light)', borderRadius: '8px', display: 'flex', gap: '24px', fontSize: '14px' } }, [
-        crearEl('span', {}, ['Total Jabas: <strong id="ventaTotalJabas">0.00</strong>']),
-        crearEl('span', {}, ['Peso: <strong id="ventaPeso">0.00</strong> kg']),
-        crearEl('span', {}, ['Importe: S/ <strong id="ventaImporte">0.00</strong>']),
+        crearEl('span', {}, ['Total Jabas: ', crearEl('strong', { id: 'ventaTotalJabas' }, ['0.00'])]),
+        crearEl('span', {}, ['Peso: ', crearEl('strong', { id: 'ventaPeso' }, ['0.00']), ' kg']),
+        crearEl('span', {}, ['Importe: S/ ', crearEl('strong', { id: 'ventaImporte' }, ['0.00'])]),
       ]),
       crearEl('div', { style: { marginTop: '12px' } }, [
         crearEl('button', { className: 'btn btn-green', onClick: registrarVenta }, ['💰 Registrar Venta']),
@@ -1063,6 +1191,17 @@ async function renderVentas() {
       ]),
     ]));
   } catch { c.innerHTML = '<div class="card">Error al cargar ventas</div>'; }
+}
+
+function toggleVentaSucio() {
+  const mostrar = $('ventaMostrarSucio')?.checked;
+  const sucio = $('ventaRowSucio');
+  const quinados = $('ventaRowQuinados');
+  const label = $('ventaSegundaLabel');
+  if (sucio) sucio.style.display = mostrar ? '' : 'none';
+  if (quinados) quinados.style.display = mostrar ? '' : 'none';
+  if (label) label.rowSpan = mostrar ? 4 : 2;
+  calcVenta();
 }
 
 let ventaPesoJaba = 18;
@@ -1269,7 +1408,7 @@ async function guardarEmpresa() {
 }
 
 async function editarParametro(p) {
-  abrirModal('Editar: ' + p.clave, ['Guardar'], async (data) => {
+  abrirModal('Editar: ' + p.clave, ['Guardar'], async (action, data) => {
     await api('/configuracion/parametros/' + p.id, { method: 'PUT', body: { valor: data.valor } });
     renderConfiguracion();
   }, [
@@ -1280,7 +1419,7 @@ async function editarParametro(p) {
 }
 
 function modalFormula(f) {
-  abrirModal('Fórmula', [f ? 'Guardar' : 'Crear'], async (data) => {
+  abrirModal('Fórmula', [f ? 'Guardar' : 'Crear'], async (action, data) => {
     if (f) return api('/formulas/' + f.id, { method: 'PUT', body: data });
     return api('/formulas', { method: 'POST', body: data });
   }, [
@@ -1290,7 +1429,7 @@ function modalFormula(f) {
 }
 
 function modalCliente(cl) {
-  abrirModal('Cliente', [cl ? 'Guardar' : 'Crear'], async (data) => {
+  abrirModal('Cliente', [cl ? 'Guardar' : 'Crear'], async (action, data) => {
     if (cl) return api('/clientes/' + cl.id, { method: 'PUT', body: data });
     return api('/clientes', { method: 'POST', body: data });
   }, [
@@ -1299,7 +1438,7 @@ function modalCliente(cl) {
 }
 
 function modalUsuario(u) {
-  abrirModal('Usuario', [u ? 'Guardar' : 'Crear'], async (data) => {
+  abrirModal('Usuario', [u ? 'Guardar' : 'Crear'], async (action, data) => {
     if (u) return api('/configuracion/usuarios/' + u.id, { method: 'PUT', body: data });
     return api('/configuracion/usuarios', { method: 'POST', body: data });
   }, [
@@ -1326,6 +1465,8 @@ function abrirModal(titulo, acciones, onSubmit, campos, onClose, width) {
     grp.appendChild(crearEl('label', {}, [c.label]));
     if (c.type === 'static') {
       grp.appendChild(crearEl('div', { style: { padding: '8px 0', fontWeight: 500, color: 'var(--text)' } }, [c.value || '-']));
+    } else if (c.type === 'custom' && typeof c.render === 'function') {
+      grp.appendChild(c.render());
     } else if (c.type === 'select') {
       const sel = crearEl('select', { id: fieldId(c) });
       (c.options || []).forEach(o => sel.appendChild(crearEl('option', { value: o, selected: o === c.value }, [o])));
@@ -1355,7 +1496,7 @@ function abrirModal(titulo, acciones, onSubmit, campos, onClose, width) {
       }
       try {
         if (typeof onSubmit === 'function') {
-          const result = await onSubmit(data);
+          const result = await onSubmit(a, data);
           if (result && result.success === false) return;
         }
         cerrarModal();
