@@ -363,7 +363,7 @@ async function api(path, options = {}) {
           [t1,t2,t3,t4,t5].filter(Boolean).forEach(k=>{
             const jab=parseFloat(body[k])||0;
             tj+=jab;
-            ti+=jab*precio;
+            ti+=jab*pesoJaba*precio;
           });
         });
         const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*pesoJaba,total:ti});
@@ -997,8 +997,8 @@ async function renderVentas() {
         ])]),
       ]),
       crearEl('div', { className: 'form-grid', style: { gap: '8px', marginTop: '8px' } }, [
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x jaba PRIMERA']), crearEl('input', { id: 'precioPrimera', type: 'number', value: '4.50', min: '0', step: '0.01', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x jaba SEGUNDA (Pardo, Jumbo, Sucio, Quiñados)']), crearEl('input', { id: 'precioSegunda', type: 'number', value: '3.50', min: '0', step: '0.01', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg PRIMERA']), crearEl('input', { id: 'precioPrimera', type: 'number', value: '4.50', min: '0', step: '0.01', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg SEGUNDA (Pardo, Jumbo, Sucio, Quiñados)']), crearEl('input', { id: 'precioSegunda', type: 'number', value: '3.50', min: '0', step: '0.01', onInput: calcVenta })]),
       ]),
       crearEl('div', { className: 'table-wrap', style: { marginTop: '8px' } }, [crearEl('table', {}, [
         crearEl('thead', {}, [crearEl('tr', {}, ['Categoría','Tipo','Jabas','Subtotal'].map(h => crearEl('th', {}, [h])))]),
@@ -1057,7 +1057,8 @@ function calcVenta() {
     [t1,t2,t3,t4,t5].filter(Boolean).forEach(k => {
       const jab = parseFloat($('venta_'+k)?.value) || 0;
       totalJabas += jab;
-      const sub = jab * precio;
+      const kg = jab * ventaPesoJaba;
+      const sub = kg * precio;
       totalImporte += sub;
       const el = $('ventaSub_'+k);
       if (el) el.innerHTML = 'S/ ' + num(sub);
@@ -1083,7 +1084,7 @@ async function registrarVenta() {
       const jab = parseFloat($('venta_'+k)?.value) || 0;
       body[k] = jab;
       totalJabas += jab;
-      totalImporte += jab * precio;
+      totalImporte += jab * ventaPesoJaba * precio;
     });
   });
   if (totalJabas <= 0) return mostrarMensaje('Debe vender al menos 1 jaba', 'warning');

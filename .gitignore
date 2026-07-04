@@ -362,6 +362,3 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# ERP Avícola - SQLite database
-backend/erp_avicola.db
-backend/*.db
