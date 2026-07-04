@@ -120,8 +120,6 @@ class AuthenticatedSupabaseClient extends SupabaseClient {
   }
 }
 
-let supabaseAuth = null;
-
 function crearEl(tag, props = {}, hijos = []) {
   const el = document.createElement(tag);
   Object.entries(props).forEach(([k, v]) => {
@@ -162,15 +160,19 @@ let toasts = [];
 let toastId = 0;
 
 // Auth state management
-let authToken = localStorage.getItem('supabase.auth.token');
-if (authToken) {
+let supabaseAuth = null;
+let authToken = null;
+const savedSession = localStorage.getItem('supabase.auth.token');
+if (savedSession) {
   try {
-    const session = JSON.parse(authToken);
+    const parsed = JSON.parse(savedSession);
+    authToken = parsed.access_token || savedSession;
     sesion = {
-      usuario: session.user.email || session.user.user_metadata?.nombre || 'Usuario',
-      rol: session.user.user_metadata?.rol || 'usuario',
-      id: session.user.id
+      usuario: parsed.user?.email || parsed.user?.user_metadata?.nombre || 'Usuario',
+      rol: parsed.user?.user_metadata?.rol || 'usuario',
+      id: parsed.user?.id
     };
+    supabaseAuth = new AuthenticatedSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, authToken);
     aplicarSesion();
   } catch { localStorage.removeItem('supabase.auth.token'); }
 }
@@ -343,22 +345,12 @@ function mostrarMensaje(msg, tipo = 'info') {
   setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(20px)'; setTimeout(() => t.remove(), 300); }, tipo === 'error' ? 5000 : 3000);
 }
 
-// --- AUTH ---
-async function iniciarSesion(usuario, clave) {
-  const data = await api('/auth/login', { method: 'POST', body: { usuario, clave } });
-  if (data.success) {
-    sesion = data.user;
-    localStorage.setItem('erp_sesion', JSON.stringify(sesion));
-    aplicarSesion();
-    mostrarMensaje(`Bienvenido, ${sesion.usuario}`, 'success');
-  }
-  return data;
-}
-
 function cerrarSesion() {
+  localStorage.removeItem('supabase.auth.token');
+  authToken = null;
+  supabaseAuth = null;
   sesion = null;
-  localStorage.removeItem('erp_sesion');
-  mostrarLogin();
+  abrirModalAutenticacion();
 }
 
 function aplicarSesion() {
@@ -381,49 +373,12 @@ function aplicarSesion() {
     }
     navegar('dashboard');
   } else {
-    mostrarLogin();
+    abrirModalAutenticacion();
   }
 }
 
 function mostrarLogin() {
-  const c = $('content'); vaciar(c); c.innerHTML = '';
-  
-  const login = crearEl('div', {
-    style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: '20px' }
-  }, [
-    crearEl('div', { className: 'card', style: { maxWidth: '420px', width: '100%', padding: '32px' } }, [
-      crearEl('div', { style: { textAlign: 'center', marginBottom: '24px' } }, [
-        crearEl('div', { style: { fontSize: '48px', marginBottom: '8px' } }, ['🔐']),
-        crearEl('h2', { style: { fontSize: '20px' } }, ['Acceder a Base de Datos']),
-        crearEl('p', { style: { color: 'var(--text2)', fontSize: '13px', marginTop: '4px' } }, ['Inicia sesión para acceder a Supabase']),
-      ]),
-      crearEl('div', { className: 'form-grid' }, [
-        crearEl('div', { className: 'form-group' }, [
-          crearEl('label', {}, ['Correo electrónico']),
-          crearEl('input', { id: 'loginEmail', type: 'email', placeholder: 'usuario@ejemplo.com', autocomplete: 'username' }),
-        ]),
-        crearEl('div', { className: 'form-group' }, [
-          crearEl('label', {}, ['Contraseña']),
-          crearEl('input', { id: 'loginPass', type: 'password', placeholder: '••••', autocomplete: 'current-password' }),
-        ]),
-      ]),
-      crearEl('button', { className: 'btn btn-primary', style: { width: '100%', marginTop: '16px', justifyContent: 'center' }, onClick: doLogin }, ['Ingresar a Base de Datos']),
-      crearEl('div', { style: { textAlign: 'center', marginTop: '16px', fontSize: '11px', color: 'var(--text3)' } }, []),
-    ])
-  ]);
-  c.appendChild(login);
-  setTimeout(() => $('loginEmail')?.focus(), 100);
-  $('loginPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  $('loginEmail')?.addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass')?.focus(); });
-}
-
-async function doLogin() {
-  const u = $('loginUser')?.value?.trim();
-  const p = $('loginPass')?.value?.trim();
-  if (!u || !p) return mostrarMensaje('Ingrese usuario y contraseña', 'warning');
-  try {
-    await iniciarSesion(u, p);
-  } catch { }
+  abrirModalAutenticacion();
 }
 
 // --- NAV ---
@@ -460,15 +415,7 @@ function navegar(section) {
 
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('erp_sesion');
-  if (saved) {
-    try {
-      sesion = JSON.parse(saved);
-      aplicarSesion();
-    } catch { mostrarLogin(); }
-  } else {
-    mostrarLogin();
-  }
+  if (!supabaseAuth) abrirModalAutenticacion();
 
   $('hamburger').addEventListener('click', () => $('sidebar').classList.toggle('open'));
   $('btnLogout').addEventListener('click', cerrarSesion);
