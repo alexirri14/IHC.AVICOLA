@@ -1,1726 +1,1242 @@
-// API Helper
-async function api(method, url, body) {
-  const opts = { method, headers: {} };
-  if (body) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
+const $ = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
+const qs = (el, sel) => (el || document).querySelector(sel);
+const qsa = (el, sel) => (el || document).querySelectorAll(sel);
+
+// ========== SUPABASE CONFIGURATION ==========
+const SUPABASE_URL = 'https://gldoiaecfjsaolfmonsr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_y-xonjHlXauKm9CTexr7xw_5jvxQ1cL';
+
+// ========== SUPABASE CLIENT ==========
+class SupabaseClient {
+  constructor(url, key) {
+    this.url = url;
+    this.key = key;
+    this.headers = {
+      'apikey': key,
+      'Authorization': `Bearer ${key}`, 
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
   }
-  try {
-    const res = await fetch(url, opts);
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg = (data && data.error) || `Error ${res.status}`;
-      mostrarMensaje(msg, 'error');
-      throw new Error(msg);
+
+  async request(method, endpoint, body = null, params = {}) {
+    const url = `${this.url}/rest/v1/${endpoint}`;
+    const queryParams = new URLSearchParams(params);
+    const fullUrl = queryParams.toString() ? `${url}?${queryParams.toString()}` : url;
+    
+    const options = {
+      method,
+      headers: this.headers,
+      body: body ? JSON.stringify(body) : null
+    };
+
+    try {
+      const response = await fetch(fullUrl, options);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Supabase error: ${response.status} - ${error}`);
+      }
+      return await response.json();
+    } catch (error) {
+      mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      throw error;
     }
-    return data;
-  } catch (err) {
-    if (!(err instanceof Error) || !err.message.startsWith('Error'))
-      mostrarMensaje('Error de conexión con el servidor', 'error');
-    throw err;
+  }
+
+  async select(table, columns = '*', filters = {}, options = {}) {
+    const params = { ...options, select: columns };
+    Object.assign(params, filters);
+    return await this.request('GET', table, null, params);
+  }
+
+  async insert(table, body) {
+    return await this.request('POST', table, body);
+  }
+
+  async update(table, body, filters) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      params.append(key, value);
+    });
+    const url = `${this.url}/rest/v1/${table}?${params.toString()}`;
+    const options = {
+      method: 'PATCH',
+      headers: this.headers,
+      body: JSON.stringify(body)
+    };
+
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Supabase error: ${response.status} - ${error}`);
+      }
+      return await response.json();
+    } catch (error) {
+      mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      throw error;
+    }
+  }
+
+  async delete(table, filters) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      params.append(key, value);
+    });
+    const url = `${this.url}/rest/v1/${table}?${params.toString()}`;
+    const options = {
+      method: 'DELETE',
+      headers: this.headers
+    };
+
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Supabase error: ${response.status} - ${error}`);
+      }
+      return await response.json();
+    } catch (error) {
+      mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      throw error;
+    }
+  }
+
+  rpc(functionName, body) {
+    return this.request('POST', `rpc/${functionName}`, body);
   }
 }
 
-// State
-let session = null;
-let galponesCache = [];
+// Initialize Supabase client
+const supabase = new SupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Utility
-function $(id) { return document.getElementById(id); }
-function numero(v) { return Number(v || 0); }
+// ========== AUTHENTICATED SUPABASE CLIENT ==========
+class AuthenticatedSupabaseClient extends SupabaseClient {
+  constructor(url, key, token) {
+    super(url, key);
+    this.token = token;
+    this.headers.Authorization = `Bearer ${token}`;
+  }
+}
+
+let supabaseAuth = null;
+
+function crearEl(tag, props = {}, hijos = []) {
+  const el = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => {
+    if (k === 'className') el.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'innerHTML') el.innerHTML = v;
+    else el.setAttribute(k, v);
+  });
+  hijos.forEach(h => { if (h != null) el.appendChild(typeof h === 'string' ? document.createTextNode(h) : h); });
+  return el;
+}
+function vaciar(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+function num(v, d = 2) { const n = parseFloat(v) || 0; return isNaN(n) ? '0.00' : n.toFixed(d); }
+
 function hoy() { return new Date().toISOString().split('T')[0]; }
-function escapeHTML(v) { return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
-function formatoJabas(v) { const n = numero(v); return Number.isInteger(n) ? String(n) : n.toFixed(1); }
-function calcularPaquetesDesdeJabas(j) { return Math.round(numero(j) * 2); }
-function esCantidadJabasValida(v) { const n = numero(v); return n >= 0 && Math.abs(n * 2 - Math.round(n * 2)) < 1e-6; }
 
-function mostrarMensaje(texto, tipo) {
-  const el = $('mensaje');
-  if (!el) return;
-  el.textContent = texto;
-  el.className = 'mensaje ' + (tipo === 'error' ? 'error' : 'ok');
-  setTimeout(() => { el.className = 'mensaje hidden'; }, 3500);
+function formatearFecha(f) {
+  if (!f) return '-';
+  const d = new Date(f + 'T12:00:00');
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// Galpon helpers
-async function cargarGalpones() {
-  try { galponesCache = await api('GET', '/api/galpones') || []; } catch { galponesCache = []; }
-  return galponesCache;
+function fechaISO(d) {
+  return d.toISOString().split('T')[0];
 }
 
-function opcionesGalponesHTML(galpones, incluirTodos) {
-  const opts = (galpones || galponesCache).map(g =>
-    `<option value="${g.id}">${escapeHTML(g.nombre)}</option>`
-  ).join('');
-  return incluirTodos ? '<option value="">Todos</option>' + opts : opts;
+function diasAtras(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return fechaISO(d);
 }
 
-function nombreGalponPorId(id) {
-  const g = (galponesCache || []).find(x => x.id === id);
-  return g ? g.nombre : '';
-}
+const API_BASE = '/api';
+let sesion = null;
+let currentSection = 'dashboard';
+let toasts = [];
+let toastId = 0;
 
-// ==================== LOGIN ====================
-async function iniciarSesion() {
-  const usuario = ($('login-user')?.value || '').trim();
-  const clave = ($('login-pass')?.value || '').trim();
-  if (!usuario || !clave) { mostrarMensaje('Ingrese usuario y contraseña', 'error'); return; }
+// Auth state management
+let authToken = localStorage.getItem('supabase.auth.token');
+if (authToken) {
   try {
-    const res = await api('POST', '/api/auth/login', { usuario, clave });
-    if (res && res.usuario) {
-      session = res.usuario;
-      await cargarGalpones();
-      mostrarAplicacion();
-    } else {
-      mostrarMensaje('Credenciales inválidas', 'error');
-    }
-  } catch { /* message shown by api helper */ }
+    const session = JSON.parse(authToken);
+    sesion = {
+      usuario: session.user.email || session.user.user_metadata?.nombre || 'Usuario',
+      rol: session.user.user_metadata?.rol || 'usuario',
+      id: session.user.id
+    };
+    aplicarSesion();
+  } catch { localStorage.removeItem('supabase.auth.token'); }
+}
+
+function getSupabaseAuth() {
+  if (!supabaseAuth && authToken) {
+    supabaseAuth = new AuthenticatedSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, authToken);
+  }
+  return supabaseAuth;
+}
+
+async function signInWithPassword(email, password) {
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ email, password })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Error de autenticación');
+  }
+  
+  const session = await response.json();
+  localStorage.setItem('supabase.auth.token', JSON.stringify(session));
+  authToken = session.access_token;
+  
+  supabaseAuth = new AuthenticatedSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, authToken);
+  
+  sesion = {
+    usuario: session.user.email || session.user.user_metadata?.nombre || 'Usuario',
+    rol: session.user.user_metadata?.rol || 'usuario',
+    id: session.user.id
+  };
+  
+  aplicarSesion();
+  mostrarMensaje(`Bienvenido, ${sesion.usuario}`, 'success');
+  return session;
+}
+
+function signOut() {
+  localStorage.removeItem('supabase.auth.token');
+  authToken = null;
+  supabaseAuth = null;
+  sesion = null;
+  cerrarSesion();
+}
+
+// Fix authentication function to use Supabase
+async function iniciarSesion(usuario, clave) {
+  try {
+    await signInWithPassword(usuario, clave);
+    return { success: true };
+  } catch (error) {
+    console.error('Error de login Supabase:', error);
+    return { success: false, error: error.message || 'Credenciales inválidas' };
+  }
+}
+
+function abrirModalAutenticacion() {
+  if (!supabaseAuth) {
+    const c = $('content'); if (!c) return;
+    vaciar(c); c.innerHTML = '';
+    const login = crearEl('div', {
+      style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: '20px' }
+    }, [
+      crearEl('div', { className: 'card', style: { maxWidth: '400px', width: '100%', padding: '32px' } }, [
+        crearEl('div', { style: { textAlign: 'center', marginBottom: '24px' } }, [
+          crearEl('div', { style: { fontSize: '48px', marginBottom: '8px' } }, ['🔐']),
+          crearEl('h2', { style: { fontSize: '20px' } }, ['Acceder a Base de Datos']),
+          crearEl('p', { style: { color: 'var(--text2)', fontSize: '13px', marginTop: '4px' } }, ['Inicia sesión para continuar con Supabase']),
+        ]),
+        crearEl('div', { className: 'form-grid' }, [
+          crearEl('div', { className: 'form-group' }, [
+            crearEl('label', {}, ['Correo electrónico']),
+            crearEl('input', { id: 'loginEmail', type: 'email', placeholder: 'usuario@ejemplo.com', autocomplete: 'username' }),
+          ]),
+          crearEl('div', { className: 'form-group' }, [
+            crearEl('label', {}, ['Contraseña']),
+            crearEl('input', { id: 'loginPass', type: 'password', placeholder: '••••', autocomplete: 'current-password' }),
+          ]),
+        ]),
+        crearEl('button', { className: 'btn btn-primary', style: { width: '100%', marginTop: '16px', justifyContent: 'center' }, onClick: doLogin }, ['Ingresar a Supabase']),
+        crearEl('div', { style: { textAlign: 'center', marginTop: '16px', fontSize: '11px', color: 'var(--text3)' } }, []),
+      ])
+    ]);
+    c.appendChild(login);
+    setTimeout(() => $('loginEmail')?.focus(), 100);
+    $('loginPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    $('loginEmail')?.addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass')?.focus(); });
+  } else {
+    mostrarMensaje('Ya estás conectado a Supabase', 'info');
+  }
+}
+
+async function doLogin() {
+  const u = $('loginEmail')?.value?.trim();
+  const p = $('loginPass')?.value?.trim();
+  if (!u || !p) return mostrarMensaje('Ingrese correo electrónico y contraseña', 'warning');
+  try {
+    await iniciarSesion(u, p);
+  } catch { }
+}
+
+async function api(path, options = {}) {
+  const url = API_BASE + path;
+  const config = {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  };
+  if (options.body && typeof options.body === 'object') config.body = JSON.stringify(options.body);
+
+  try {
+    const res = await fetch(url, config);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    return data;
+  } catch (e) {
+    if (e.message !== 'AbortError') mostrarMensaje(e.message, 'error');
+    throw e;
+  }
+}
+
+async function supabaseQuery(table, filters = {}, options = {}) {
+  const client = getSupabaseAuth();
+  if (!client) throw new Error('No autenticado en Supabase');
+
+  const params = { ...options, select: '*' };
+  if (Object.keys(filters).length > 0) {
+    Object.assign(params, filters);
+  }
+
+  return await client.select(table, '*', params);
+}
+
+async function supabaseInsert(table, body) {
+  const client = getSupabaseAuth();
+  if (!client) throw new Error('No autenticado en Supabase');
+  return await client.insert(table, body);
+}
+
+async function supabaseUpdate(table, body, filters) {
+  const client = getSupabaseAuth();
+  if (!client) throw new Error('No autenticado en Supabase');
+  return await client.update(table, body, filters);
+}
+
+async function supabaseDelete(table, filters) {
+  const client = getSupabaseAuth();
+  if (!client) throw new Error('No autenticado en Supabase');
+  return await client.delete(table, filters);
+}
+
+function mostrarMensaje(msg, tipo = 'info') {
+  const id = ++toastId;
+  const colors = { info: 'var(--primary)', success: 'var(--green)', error: 'var(--red)', warning: 'var(--orange)' };
+  const t = crearEl('div', {
+    style: {
+      position: 'fixed', bottom: '20px', right: '20px', zIndex: '9999',
+      background: colors[tipo] || colors.info, color: '#fff',
+      padding: '12px 20px', borderRadius: '10px', fontSize: '13px',
+      boxShadow: '0 4px 12px rgba(0,0,0,.2)', maxWidth: '360px',
+      transition: 'opacity .3s, transform .3s',
+    }, innerHTML: msg
+  });
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(20px)'; setTimeout(() => t.remove(), 300); }, tipo === 'error' ? 5000 : 3000);
+}
+
+// --- AUTH ---
+async function iniciarSesion(usuario, clave) {
+  const data = await api('/auth/login', { method: 'POST', body: { usuario, clave } });
+  if (data.success) {
+    sesion = data.user;
+    localStorage.setItem('erp_sesion', JSON.stringify(sesion));
+    aplicarSesion();
+    mostrarMensaje(`Bienvenido, ${sesion.usuario}`, 'success');
+  }
+  return data;
 }
 
 function cerrarSesion() {
-  session = null;
-  galponesCache = [];
-  const login = $('login-screen');
-  const app = $('app');
-  if (login) login.classList.remove('hidden');
-  if (app) app.classList.add('hidden');
+  sesion = null;
+  localStorage.removeItem('erp_sesion');
+  mostrarLogin();
 }
 
-function mostrarAplicacion() {
-  const login = $('login-screen');
-  const app = $('app');
-  if (login) login.classList.add('hidden');
-  if (app) app.classList.remove('hidden');
-  if (session && $('user-role')) $('user-role').textContent = session.rol || '';
-  aplicarPermisos();
-  poblarSelectores();
-  actualizarTodo();
-}
-
-function aplicarPermisos() {
-  const rol = session ? session.rol : '';
-  const botones = [
-    { id: 'btn-guardar-produccion', roles: ['Administrador', 'Producción'] },
-    { id: 'btn-ingresar-insumo', roles: ['Administrador', 'Almacén'] },
-    { id: 'btn-agregar-insumo', roles: ['Administrador'] },
-    { id: 'btn-eliminar-insumo', roles: ['Administrador'] },
-    { id: 'btn-consumir-alimento', roles: ['Administrador', 'Almacén'] },
-    { id: 'btn-guardar-clases-segunda', roles: ['Administrador', 'Almacén'] },
-    { id: 'btn-producir-molino', roles: ['Administrador', 'Almacén'] },
-    { id: 'btn-guardar-formula-destino', roles: ['Administrador'] },
-    { id: 'btn-agregar-formula-insumo', roles: ['Administrador'] },
-    { id: 'btn-quitar-formula-insumo', roles: ['Administrador'] },
-    { id: 'btn-crear-formula', roles: ['Administrador'] },
-    { id: 'btn-eliminar-formula', roles: ['Administrador'] },
-    { id: 'btn-guardar-venta', roles: ['Administrador', 'Ventas'] },
-    { id: 'btn-admin-agregar-galpon', roles: ['Administrador'] },
-    { id: 'btn-admin-cargar-galpon', roles: ['Administrador'] },
-    { id: 'btn-admin-guardar-galpon', roles: ['Administrador'] },
-    { id: 'btn-admin-eliminar-galpon', roles: ['Administrador'] },
-    { id: 'btn-guardar-cliente', roles: ['Administrador'] },
-    { id: 'btn-guardar-proveedor', roles: ['Administrador'] },
-    { id: 'btn-guardar-empleado', roles: ['Administrador'] },
-    { id: 'btn-guardar-compra', roles: ['Administrador', 'Almacén'] },
-  ];
-  botones.forEach(b => {
-    const el = $(b.id);
-    if (el) {
-      const allowed = b.roles.includes(rol);
-      el.disabled = !allowed;
-      el.title = allowed ? '' : 'No tiene permiso';
+function aplicarSesion() {
+  if (supabaseAuth) {
+    $('loginScreen')?.remove();
+    $('userAvatar').textContent = (sesion.usuario[0] || 'U').toUpperCase();
+    $('userName').textContent = sesion.usuario;
+    $('userRol').textContent = sesion.rol;
+    $('roleBadge').textContent = sesion.rol;
+    const items = qsa('.nav-item[data-section]');
+    if (sesion.rol === 'Producción') {
+      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','galpones','molino'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
+      $('subInventario').querySelectorAll('.nav-item').forEach(i => i.style.display = 'none');
+    } else if (sesion.rol === 'Almacén') {
+      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','inventario','compras','almacen-huevos','almacen-insumos'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
+    } else if (sesion.rol === 'Ventas') {
+      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','ventas'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
+    } else if (sesion.rol === 'Gerencia') {
+      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','reportes'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
     }
-  });
-  const adminBtn = document.querySelector('.nav-btn[data-tab="admin"]');
-  if (adminBtn) adminBtn.style.display = rol === 'Administrador' ? '' : 'none';
-}
-
-// ==================== NAVEGACIÓN ====================
-function cambiarTab(tab) {
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
-  const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
-  const sec = $(`tab-${tab}`);
-  if (btn) btn.classList.add('active');
-  if (sec) sec.classList.add('active');
-}
-
-// ==================== SELECTORES ====================
-async function poblarSelectores() {
-  await cargarGalpones();
-  const galpones = galponesCache;
-
-  const selectsGalpon = ['prod-galpon', 'filtro-prod-galpon', 'molino-galpon', 'consumo-galpon',
-    'admin-galpon-editar-select', 'admin-galpon-eliminar', 'rendimiento-galpon'];
-  selectsGalpon.forEach(id => {
-    const el = $(id);
-    if (el) {
-      const incluirTodos = id === 'filtro-prod-galpon';
-      el.innerHTML = opcionesGalponesHTML(galpones, incluirTodos);
-    }
-  });
-
-  // Clientes
-  try {
-    const clientes = await api('GET', '/api/clientes');
-    const selCliente = $('venta-cliente-select');
-    if (selCliente) {
-      selCliente.innerHTML = '<option value="">-- Seleccione --</option>' +
-        (clientes || []).map(c => `<option value="${c.id}" data-nombre="${escapeHTML(c.nombre)}">${escapeHTML(c.nombre)}</option>`).join('');
-    }
-  } catch {}
-
-  // Proveedores
-  try {
-    const proveedores = await api('GET', '/api/proveedores');
-    const selProv = $('compra-proveedor');
-    if (selProv) {
-      selProv.innerHTML = '<option value="">-- Seleccione --</option>' +
-        (proveedores || []).map(p => `<option value="${p.id}" data-nombre="${escapeHTML(p.nombre)}">${escapeHTML(p.nombre)}</option>`).join('');
-    }
-  } catch {}
-
-  // Insumos
-  try {
-    const insumos = await api('GET', '/api/insumos');
-    const selectsInsumo = ['insumo-nombre', 'edit-formula-insumo', 'admin-insumo-eliminar', 'compra-insumo'];
-    selectsInsumo.forEach(id => {
-      const el = $(id);
-      if (el) {
-        el.innerHTML = (insumos || []).map(i =>
-          `<option value="${i.id}" data-nombre="${escapeHTML(i.nombre)}" data-etiqueta="${escapeHTML(i.etiqueta || '')}">${escapeHTML(i.nombre)} (${escapeHTML(i.etiqueta || i.unidad_compra || '')})</option>`
-        ).join('');
-      }
-    });
-  } catch {}
-
-  // Fórmulas
-  try {
-    const formulas = await api('GET', '/api/molino/formulas');
-    const selFormula = $('edit-formula');
-    if (selFormula) {
-      selFormula.innerHTML = (formulas || []).map(f =>
-        `<option value="${f.id}" data-nombre="${escapeHTML(f.nombre)}">${escapeHTML(f.nombre)}</option>`
-      ).join('');
-    }
-  } catch {}
-}
-
-// ==================== DASHBOARD ====================
-async function actualizarDashboard() {
-  try {
-    const d = await api('GET', '/api/reportes/dashboard');
-    if (!d) return;
-    if ($('dash-produccion-hoy')) $('dash-produccion-hoy').textContent = (d.produccion_hoy || 0) + ' jabas';
-    if ($('dash-stock-jabas')) $('dash-stock-jabas').textContent = (d.stock_huevos || 0) + ' jabas';
-    if ($('dash-ventas-hoy')) $('dash-ventas-hoy').textContent = 'S/ ' + (d.ventas_hoy || 0).toFixed(2);
-    if ($('dash-stock-alimento')) $('dash-stock-alimento').textContent = (d.stock_alimento_sacos || 0) + ' sacos';
-  } catch {}
-
-  // Alertas
-  try {
-    const alertas = await api('GET', '/api/alertas/generar');
-    const cont = $('dashboard-alertas');
-    if (cont) {
-      if (!alertas || alertas.length === 0) {
-        cont.innerHTML = '<div class="alert ok">Sin alertas por el momento.</div>';
-      } else {
-        cont.innerHTML = alertas.map(a =>
-          `<div class="alert danger">${escapeHTML(a.mensaje || a.titulo || '')}</div>`
-        ).join('');
-      }
-    }
-  } catch {}
-}
-
-// ==================== PRODUCCIÓN ====================
-async function guardarProduccion() {
-  const fecha = $('prod-fecha')?.value;
-  const galponId = Number($('prod-galpon')?.value);
-  const primera = numero($('prod-jabas-primera')?.value);
-  const segunda = numero($('prod-jabas-segunda')?.value);
-  const muertas = numero($('prod-muertas')?.value);
-
-  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
-  if (!galponId) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
-  if (primera < 0 || segunda < 0 || muertas < 0) { mostrarMensaje('Las cantidades no pueden ser negativas', 'error'); return; }
-  if (!esCantidadJabasValida(primera) || !esCantidadJabasValida(segunda)) { mostrarMensaje('Solo se aceptan jabas enteras o medias jabas', 'error'); return; }
-  if (primera + segunda <= 0) { mostrarMensaje('Ingrese jabas de primera o segunda', 'error'); return; }
-
-  try {
-    await api('POST', '/api/produccion', { fecha, galpon_id: galponId, primera, segunda, muertas });
-    mostrarMensaje('Producción registrada correctamente');
-    $('prod-jabas-primera').value = '0';
-    $('prod-jabas-segunda').value = '0';
-    $('prod-muertas').value = '0';
-    actualizarPaquetesProduccion();
-    actualizarTablaProduccion();
-    actualizarDashboard();
-  } catch {}
-}
-
-async function eliminarProduccion(id) {
-  if (!confirm('¿Eliminar esta producción?')) return;
-  try {
-    await api('DELETE', '/api/produccion/' + id);
-    mostrarMensaje('Producción eliminada');
-    actualizarTablaProduccion();
-    actualizarDashboard();
-  } catch {}
-}
-
-async function actualizarTablaProduccion() {
-  const fecha = $('filtro-prod-fecha')?.value;
-  const galponId = $('filtro-prod-galpon')?.value;
-  const params = new URLSearchParams();
-  if (fecha) params.set('fecha', fecha);
-  if (galponId) params.set('galpon_id', galponId);
-  try {
-    const lista = await api('GET', '/api/produccion?' + params.toString()) || [];
-    const tbody = $('tabla-produccion');
-    if (!tbody) return;
-    if (lista.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9">Sin registros</td></tr>';
-      return;
-    }
-    tbody.innerHTML = lista.map(p => {
-      const jabas = numero(p.primera) + numero(p.segunda);
-      const paq = calcularPaquetesDesdeJabas(jabas);
-      return `<tr>
-        <td>${p.fecha}</td>
-        <td>${escapeHTML(p.galpon_nombre || nombreGalponPorId(p.galpon_id))}</td>
-        <td>${formatoJabas(p.primera)}</td>
-        <td>${formatoJabas(p.segunda)}</td>
-        <td>${formatoJabas(jabas)}</td>
-        <td>${paq}</td>
-        <td>${numero(p.muertas)}</td>
-        <td>${p.gallinas_restantes ?? '-'}</td>
-        <td><button class="btn btn-danger" onclick="eliminarProduccion(${p.id})">Eliminar</button></td>
-      </tr>`;
-    }).join('');
-  } catch {}
-}
-
-function filtrarProduccion() { actualizarTablaProduccion(); }
-function limpiarFiltroProduccion() {
-  if ($('filtro-prod-fecha')) $('filtro-prod-fecha').value = '';
-  if ($('filtro-prod-galpon')) $('filtro-prod-galpon').value = '';
-  actualizarTablaProduccion();
-}
-
-function actualizarPaquetesProduccion() {
-  const p = numero($('prod-jabas-primera')?.value) + numero($('prod-jabas-segunda')?.value);
-  const el = $('prod-total-paquetes');
-  if (el) el.value = calcularPaquetesDesdeJabas(p);
-}
-
-// ==================== ALMACÉN HUEVOS ====================
-async function actualizarAlmacenHuevos() {
-  try {
-    const stock = await api('GET', '/api/almacen/stock');
-    if (stock) {
-      const total = numero(stock.total);
-      if ($('almacen-stock-jabas')) $('almacen-stock-jabas').textContent = formatoJabas(total) + ' jabas';
-      if ($('almacen-stock-primera')) $('almacen-stock-primera').textContent = formatoJabas(stock.primera || 0) + ' jabas';
-      if ($('almacen-stock-segunda')) $('almacen-stock-segunda').textContent = formatoJabas(stock.segunda || 0) + ' jabas';
-      // También actualiza los del módulo de ventas
-      if ($('ventas-stock-total')) $('ventas-stock-total').textContent = formatoJabas(total) + ' jabas';
-      if ($('ventas-stock-primera')) $('ventas-stock-primera').textContent = formatoJabas(stock.primera || 0) + ' jabas';
-      if ($('ventas-stock-segunda')) $('ventas-stock-segunda').textContent = formatoJabas(stock.segunda || 0) + ' jabas';
-    }
-  } catch {}
-}
-
-async function actualizarMovimientosHuevos() {
-  try {
-    const movs = await api('GET', '/api/almacen/movimientos') || [];
-    const tbody = $('tabla-almacen-huevos');
-    if (!tbody) return;
-    tbody.innerHTML = movs.map(m => `<tr>
-      <td>${m.fecha}</td>
-      <td>${escapeHTML(m.tipo)}</td>
-      <td>${escapeHTML(m.detalle)}</td>
-      <td>${formatoJabas(m.primera)}</td>
-      <td>${formatoJabas(m.segunda)}</td>
-      <td>${formatoJabas(m.total)}</td>
-    </tr>`).join('') || '<tr><td colspan="6">Sin movimientos</td></tr>';
-  } catch {}
-}
-
-// Clasificación segunda (client-side, no API)
-const CLASES_SEGUNDA = [
-  { key: 'pardo', nombre: 'Pardo' },
-  { key: 'jumbo', nombre: 'Jumbo' },
-  { key: 'suciote', nombre: 'Suciote' },
-  { key: 'limpieza', nombre: 'Para limpieza' },
-  { key: 'quinados', nombre: 'Quiñados' }
-];
-let clasesSegundaCache = {};
-CLASES_SEGUNDA.forEach(c => clasesSegundaCache[c.key] = 0);
-
-function guardarClasificacionSegunda() {
-  CLASES_SEGUNDA.forEach(c => {
-    const input = $('segunda-' + c.key);
-    if (input) clasesSegundaCache[c.key] = Math.max(0, numero(input.value));
-  });
-  mostrarMensaje('Clasificación guardada localmente');
-  actualizarClasesSegunda();
-}
-
-function actualizarClasesSegunda() {
-  const cards = $('cards-clases-segunda');
-  if (cards) {
-    const total = CLASES_SEGUNDA.reduce((s, c) => s + numero(clasesSegundaCache[c.key]), 0);
-    cards.innerHTML = CLASES_SEGUNDA.map(c =>
-      `<div class="card mini-card">
-        <span>${c.nombre}</span>
-        <strong>${formatoJabas(clasesSegundaCache[c.key])}</strong>
-      </div>`
-    ).join('') +
-      `<div class="card mini-card card-total">
-        <span>Total clasificado</span>
-        <strong>${formatoJabas(total)}</strong>
-      </div>`;
-  }
-  CLASES_SEGUNDA.forEach(c => {
-    const input = $('segunda-' + c.key);
-    if (input) input.value = numero(clasesSegundaCache[c.key]);
-  });
-}
-
-// ==================== ALMACÉN INSUMOS ====================
-async function actualizarInsumos() {
-  try {
-    const insumos = await api('GET', '/api/insumos') || [];
-    const tbody = $('tabla-insumos');
-    if (tbody) {
-      tbody.innerHTML = insumos.map(i => {
-        const kg = numero(i.cantidad_kg);
-        const minimo = numero(i.stock_minimo_kg) || (numero(i.kg_por_unidad) || 50);
-        const estado = kg <= minimo ? 'Crítico' : (kg <= minimo * 2 ? 'Próximo a agotarse' : 'Correcto');
-        const claseEstado = kg <= minimo ? 'estado-critico' : (kg <= minimo * 2 ? 'estado-advertencia' : 'estado-correcto');
-        const pct = Math.max(0, Math.min(100, (kg / (minimo * 4)) * 100));
-        const lectura = kg <= minimo ? 'Reponer de inmediato' : (kg <= minimo * 2 ? 'Planificar compra' : 'Stock suficiente');
-        const etiqueta = i.etiqueta || i.unidad_compra || '';
-        return `<tr>
-          <td><span class="estado-stock ${claseEstado}">${estado}</span></td>
-          <td><strong>${escapeHTML(i.nombre)}</strong></td>
-          <td>${escapeHTML(etiqueta)}</td>
-          <td>${kg.toFixed(2)}</td>
-          <td>${kg.toFixed(2)} kg</td>
-          <td>${minimo.toFixed(2)} kg</td>
-          <td>
-            <div class="stock-lectura">
-              <span>${lectura}</span>
-              <div class="barra-stock"><div style="width:${pct.toFixed(0)}%"></div></div>
-            </div>
-          </td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="7">Sin insumos</td></tr>';
-    }
-    const totalKg = insumos.reduce((s, i) => s + numero(i.cantidad_kg), 0);
-    if ($('stock-insumos-total')) $('stock-insumos-total').textContent = totalKg.toFixed(0) + ' kg';
-  } catch {}
-}
-
-async function ingresarInsumo() {
-  const sel = $('insumo-nombre');
-  if (!sel) return;
-  const insumoId = Number(sel.value);
-  const cantidad = numero($('insumo-kg')?.value);
-  if (!insumoId) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
-  if (cantidad <= 0) { mostrarMensaje('Ingrese una cantidad válida', 'error'); return; }
-  try {
-    await api('PUT', '/api/insumos/' + insumoId + '/ingreso', { cantidad_kg: cantidad });
-    mostrarMensaje('Ingreso registrado');
-    $('insumo-kg').value = '';
-    actualizarInsumos();
-    actualizarAlimentoBalanceado();
-    actualizarMovimientosAlimento();
-  } catch {}
-}
-
-// ==================== ALIMENTO BALANCEADO ====================
-async function actualizarAlimentoBalanceado() {
-  try {
-    const data = await api('GET', '/api/molino/alimento') || [];
-    const tbody = $('tabla-balanceado');
-    if (tbody) {
-      tbody.innerHTML = data.map(a => {
-        const kg = numero(a.kg);
-        const sacosVal = kg / 50;
-        const estado = sacosVal < 5 ? '<span class="estado-stock estado-critico">Bajo mínimo</span>' : '<span class="estado-stock estado-correcto">Correcto</span>';
-        return `<tr>
-          <td>${escapeHTML(a.galpon_nombre || '')}</td>
-          <td>${sacosVal.toFixed(2)} sacos</td>
-          <td>${kg.toFixed(2)} kg</td>
-          <td>${estado}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="4">Sin datos</td></tr>';
-    }
-    const totalKg = data.reduce((s, a) => s + numero(a.kg), 0);
-    if ($('stock-balanceado-total')) $('stock-balanceado-total').textContent = (totalKg / 50).toFixed(0) + ' sacos';
-  } catch {}
-}
-
-async function actualizarMovimientosAlimento() {
-  try {
-    const movs = await api('GET', '/api/molino/movimientos') || [];
-    const tbody = $('tabla-alimento-mov');
-    if (!tbody) return;
-    tbody.innerHTML = movs.map(m => `<tr>
-      <td>${m.fecha}</td>
-      <td>${escapeHTML(m.tipo)}</td>
-      <td>${escapeHTML(m.detalle)}</td>
-      <td>${escapeHTML(m.cantidad || '')}</td>
-    </tr>`).join('') || '<tr><td colspan="4">Sin movimientos</td></tr>';
-  } catch {}
-}
-
-async function consumirAlimento() {
-  const sel = $('consumo-galpon');
-  if (!sel) return;
-  const galponId = Number(sel.value);
-  const sacos = numero($('consumo-kg')?.value);
-  if (!galponId) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
-  if (sacos <= 0) { mostrarMensaje('Ingrese la cantidad de sacos', 'error'); return; }
-  try {
-    await api('POST', '/api/molino/alimento/consumir', { galpon_id: galponId, sacos, fecha: hoy() });
-    mostrarMensaje('Consumo registrado');
-    $('consumo-kg').value = '';
-    actualizarAlimentoBalanceado();
-    actualizarMovimientosAlimento();
-    actualizarDashboard();
-  } catch {}
-}
-
-// ==================== MOLINO ====================
-let formulaPreviewData = null;
-
-async function cargarFormulasMolino() {
-  try {
-    return await api('GET', '/api/molino/formulas') || [];
-  } catch { return []; }
-}
-
-async function actualizarFormulaMolinoPorGalpon() {
-  const selGalpon = $('molino-galpon');
-  const inputFormula = $('molino-formula-actual');
-  const preview = $('formula-preview');
-  if (!selGalpon || !inputFormula) return '';
-  const galponId = Number(selGalpon.value);
-  if (!galponId) {
-    inputFormula.value = 'Seleccione un galpón';
-    if (preview) preview.innerHTML = '';
-    return '';
-  }
-  const formulas = await cargarFormulasMolino();
-  const formula = (formulas || []).find(f => Number(f.galpon_id) === galponId);
-  if (formula) {
-    inputFormula.value = formula.nombre || '';
-    if (preview) preview.innerHTML = `<p>Fórmula: <strong>${escapeHTML(formula.nombre)}</strong> (${escapeHTML(formula.galpon_nombre || '')})</p>`;
-    formulaPreviewData = formula;
-    return formula;
+    navegar('dashboard');
   } else {
-    inputFormula.value = 'Sin fórmula registrada';
-    if (preview) preview.innerHTML = `<p class="texto-error">No hay fórmula para este galpón. Créela en Administrador.</p>`;
-    formulaPreviewData = null;
-    return null;
+    mostrarLogin();
   }
 }
 
-function verFormulaMolino() {
-  const preview = $('formula-preview');
-  const tandas = numero($('molino-kg')?.value);
-  if (!formulaPreviewData) {
-    if (preview) preview.innerHTML = '<p class="texto-error">No hay fórmula seleccionada</p>';
-    return;
-  }
-  if (tandas <= 0) {
-    if (preview) preview.innerHTML = '<p>Ingrese el número de tandas</p>';
-    return;
-  }
-  const insumos = formulaPreviewData.insumos || [];
-  const totalKg = insumos.reduce((s, i) => s + numero(i.kg_por_tanda), 0) * tandas;
-  const sacosProducidos = tandas * 30;
-  let html = `<div class="formula-resumen">
-    <strong>${escapeHTML(formulaPreviewData.nombre)}</strong>
-    <span>${tandas} tanda(s) = ${sacosProducidos} sacos de 50 kg = ${totalKg.toFixed(2)} kg producidos</span>
-  </div>`;
-  html += insumos.map(i => {
-    const usado = numero(i.kg_por_tanda) * tandas;
-    return `<div class="formula-item">
-      <strong>${escapeHTML(i.insumo_nombre || '')}</strong>
-      <span>${usado.toFixed(2)} kg usados</span>
-    </div>`;
-  }).join('');
-  if (preview) preview.innerHTML = html;
+function mostrarLogin() {
+  const c = $('content'); vaciar(c); c.innerHTML = '';
+  
+  const login = crearEl('div', {
+    style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: '20px' }
+  }, [
+    crearEl('div', { className: 'card', style: { maxWidth: '420px', width: '100%', padding: '32px' } }, [
+      crearEl('div', { style: { textAlign: 'center', marginBottom: '24px' } }, [
+        crearEl('div', { style: { fontSize: '48px', marginBottom: '8px' } }, ['🔐']),
+        crearEl('h2', { style: { fontSize: '20px' } }, ['Acceder a Base de Datos']),
+        crearEl('p', { style: { color: 'var(--text2)', fontSize: '13px', marginTop: '4px' } }, ['Inicia sesión para acceder a Supabase']),
+      ]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [
+          crearEl('label', {}, ['Correo electrónico']),
+          crearEl('input', { id: 'loginEmail', type: 'email', placeholder: 'usuario@ejemplo.com', autocomplete: 'username' }),
+        ]),
+        crearEl('div', { className: 'form-group' }, [
+          crearEl('label', {}, ['Contraseña']),
+          crearEl('input', { id: 'loginPass', type: 'password', placeholder: '••••', autocomplete: 'current-password' }),
+        ]),
+      ]),
+      crearEl('button', { className: 'btn btn-primary', style: { width: '100%', marginTop: '16px', justifyContent: 'center' }, onClick: doLogin }, ['Ingresar a Base de Datos']),
+      crearEl('div', { style: { textAlign: 'center', marginTop: '16px', fontSize: '11px', color: 'var(--text3)' } }, []),
+    ])
+  ]);
+  c.appendChild(login);
+  setTimeout(() => $('loginEmail')?.focus(), 100);
+  $('loginPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  $('loginEmail')?.addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass')?.focus(); });
 }
 
-async function producirMolino() {
-  const fecha = $('molino-fecha')?.value;
-  const selGalpon = $('molino-galpon');
-  const tandas = numero($('molino-kg')?.value);
-  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
-  if (!selGalpon || !selGalpon.value) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
-  if (tandas <= 0) { mostrarMensaje('Ingrese tandas válidas', 'error'); return; }
-  if (!formulaPreviewData || !formulaPreviewData.id) { mostrarMensaje('El galpón no tiene fórmula', 'error'); return; }
+async function doLogin() {
+  const u = $('loginUser')?.value?.trim();
+  const p = $('loginPass')?.value?.trim();
+  if (!u || !p) return mostrarMensaje('Ingrese usuario y contraseña', 'warning');
   try {
-    await api('POST', '/api/molino/producir', { fecha, formula_id: formulaPreviewData.id, tandas });
-    mostrarMensaje('Producción de alimento registrada');
-    $('molino-kg').value = '';
-    $('formula-preview').innerHTML = '';
-    actualizarTablaMolino();
-    actualizarAlimentoBalanceado();
-    actualizarMovimientosAlimento();
-    actualizarDashboard();
-  } catch {}
+    await iniciarSesion(u, p);
+  } catch { }
 }
 
-async function actualizarTablaMolino() {
-  try {
-    const lista = await api('GET', '/api/molino/produccion') || [];
-    const tbody = $('tabla-molino');
-    if (!tbody) return;
-    tbody.innerHTML = lista.map(m => `<tr>
-      <td>${m.fecha}</td>
-      <td>${escapeHTML(m.galpon_nombre || m.destino || '')}</td>
-      <td>${m.tandas || 1}</td>
-      <td>${m.sacos || (numero(m.kg) / 50).toFixed(0)} sacos</td>
-      <td>${numero(m.kg).toFixed(2)} kg</td>
-      <td><button class="btn btn-secondary" onclick="verDetalleMolino(${m.id})">Detalle</button></td>
-    </tr>`).join('') || '<tr><td colspan="6">Sin producción</td></tr>';
-  } catch {}
-}
-
-async function verDetalleMolino(id) {
-  try {
-    const data = await api('GET', '/api/molino/produccion/' + id + '/detalle');
-    const cont = $('voucher-molino');
-    if (!cont || !data) return;
-    const p = data.produccion || {};
-    const detalle = data.detalle || [];
-    const filas = detalle.map(d => `<tr>
-      <td>${escapeHTML(d.insumo_nombre || '')}</td>
-      <td>${numero(d.kg_usado).toFixed(2)} kg</td>
-      <td>${numero(d.stock_restante).toFixed(2)} kg</td>
-    </tr>`).join('');
-    cont.classList.remove('hidden');
-    cont.innerHTML = `<div class="voucher-header">
-      <div>
-        <h3>Voucher de producción del molino</h3>
-        <p><strong>Fecha:</strong> ${escapeHTML(p.fecha)} | <strong>Destino:</strong> ${escapeHTML(p.galpon_nombre || p.destino || '')}</p>
-        <p><strong>Fórmula:</strong> ${escapeHTML(p.formula_nombre || '')} | <strong>Tandas:</strong> ${p.tandas || ''}</p>
-        <p><strong>Producción:</strong> ${p.sacos || ''} sacos (${numero(p.kg).toFixed(2)} kg)</p>
-      </div>
-      <button class="btn btn-light" onclick="cerrarDetalleMolino()">Cerrar</button>
-    </div>
-    <div class="table-box voucher-tabla">
-      <table><thead><tr><th>Insumo</th><th>Usado</th><th>Stock restante</th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="3">Sin detalle</td></tr>'}</tbody></table>
-    </div>`;
-    cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch {}
-}
-
-function cerrarDetalleMolino() {
-  const cont = $('voucher-molino');
-  if (cont) { cont.classList.add('hidden'); cont.innerHTML = ''; }
-}
-
-// ==================== VENTAS ====================
-function calcularTotalVenta() {
-  const primera = numero($('venta-primera')?.value);
-  const segunda = numero($('venta-segunda')?.value);
-  const prom = numero($('venta-promedio-kg-jaba')?.value);
-  const pp = numero($('venta-precio-primera')?.value);
-  const ps = numero($('venta-precio-segunda')?.value);
-  const totalJabas = primera + segunda;
-  const pesoPrimera = primera * prom;
-  const pesoSegunda = segunda * prom;
-  const peso = pesoPrimera + pesoSegunda;
-  const totalPrimera = pesoPrimera * pp;
-  const totalSegunda = pesoSegunda * ps;
-  const total = totalPrimera + totalSegunda;
-  if ($('venta-total-jabas')) $('venta-total-jabas').value = formatoJabas(totalJabas);
-  if ($('venta-peso')) $('venta-peso').value = peso.toFixed(2);
-  const el = $('venta-total');
-  if (el) {
-    el.innerHTML = `Total: S/ ${total.toFixed(2)} <small class="total-detalle">Primera: S/ ${totalPrimera.toFixed(2)} | Segunda: S/ ${totalSegunda.toFixed(2)}</small>`;
-  }
-}
-
-async function guardarVenta() {
-  const clienteSelect = $('venta-cliente-select');
-  const clienteNombreInput = $('venta-cliente');
-  let clienteId = null;
-  let clienteNombre = '';
-  if (clienteSelect && clienteSelect.value) {
-    clienteId = Number(clienteSelect.value);
-    const opt = clienteSelect.options[clienteSelect.selectedIndex];
-    if (opt) clienteNombre = opt.dataset.nombre || opt.text;
-  } else if (clienteNombreInput) {
-    clienteNombre = clienteNombreInput.value.trim();
-  }
-  const fecha = $('venta-fecha')?.value;
-  const primera = numero($('venta-primera')?.value);
-  const segunda = numero($('venta-segunda')?.value);
-  const prom = numero($('venta-promedio-kg-jaba')?.value);
-  const pp = numero($('venta-precio-primera')?.value);
-  const ps = numero($('venta-precio-segunda')?.value);
-
-  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
-  if (!clienteNombre) { mostrarMensaje('Ingrese o seleccione el cliente', 'error'); return; }
-  if (primera + segunda <= 0) { mostrarMensaje('Ingrese jabas de primera o segunda', 'error'); return; }
-  if (!esCantidadJabasValida(primera) || !esCantidadJabasValida(segunda)) { mostrarMensaje('Solo jabas enteras o medias jabas', 'error'); return; }
-  if (prom <= 0 || pp <= 0 || ps <= 0) { mostrarMensaje('Complete precio y promedio', 'error'); return; }
-
-  try {
-    await api('POST', '/api/ventas', { fecha, cliente_id: clienteId, cliente_nombre: clienteNombre, primera, segunda, promedio_kg_jaba: prom, precio_primera: pp, precio_segunda: ps });
-    mostrarMensaje('Venta registrada');
-    if ($('venta-cliente')) $('venta-cliente').value = '';
-    if ($('venta-cliente-select')) $('venta-cliente-select').value = '';
-    $('venta-primera').value = 0;
-    $('venta-segunda').value = 0;
-    $('venta-promedio-kg-jaba').value = 18;
-    $('venta-precio-primera').value = '6.00';
-    $('venta-precio-segunda').value = '5.00';
-    calcularTotalVenta();
-    actualizarTablaVentas();
-    actualizarAlmacenHuevos();
-    actualizarDashboard();
-  } catch {}
-}
-
-async function eliminarVenta(id) {
-  if (!confirm('¿Eliminar esta venta?')) return;
-  try {
-    await api('DELETE', '/api/ventas/' + id);
-    mostrarMensaje('Venta eliminada');
-    actualizarTablaVentas();
-    actualizarAlmacenHuevos();
-    actualizarDashboard();
-  } catch {}
-}
-
-async function actualizarTablaVentas() {
-  await actualizarAlmacenHuevos();
-  try {
-    const lista = await api('GET', '/api/ventas') || [];
-    const tbody = $('tabla-ventas');
-    if (!tbody) return;
-    tbody.innerHTML = lista.map(v => `<tr>
-      <td>${v.fecha}</td>
-      <td>${escapeHTML(v.cliente_nombre || '')}</td>
-      <td>${formatoJabas(v.primera)}</td>
-      <td>${formatoJabas(v.segunda)}</td>
-      <td>${formatoJabas(numero(v.primera) + numero(v.segunda))}</td>
-      <td>${numero(v.promedio_kg_jaba).toFixed(2)} kg</td>
-      <td>${(numero(v.primera) * numero(v.promedio_kg_jaba) + numero(v.segunda) * numero(v.promedio_kg_jaba)).toFixed(2)} kg</td>
-      <td>S/ ${numero(v.precio_primera).toFixed(2)}</td>
-      <td>S/ ${numero(v.precio_segunda).toFixed(2)}</td>
-      <td>S/ ${(numero(v.primera) * numero(v.promedio_kg_jaba) * numero(v.precio_primera)).toFixed(2)}</td>
-      <td>S/ ${(numero(v.segunda) * numero(v.promedio_kg_jaba) * numero(v.precio_segunda)).toFixed(2)}</td>
-      <td>S/ ${(numero(v.primera) * numero(v.promedio_kg_jaba) * numero(v.precio_primera) + numero(v.segunda) * numero(v.promedio_kg_jaba) * numero(v.precio_segunda)).toFixed(2)}</td>
-      <td><button class="btn btn-danger" onclick="eliminarVenta(${v.id})">Eliminar</button></td>
-    </tr>`).join('') || '<tr><td colspan="13">Sin ventas</td></tr>';
-  } catch {}
-}
-
-// ==================== CLIENTES (CRUD dinámico) ====================
-async function cargarClientes() {
-  try { return await api('GET', '/api/clientes') || []; } catch { return []; }
-}
-
-async function guardarCliente() {
-  const id = $('cliente-id')?.value;
-  const data = {
-    nombre: ($('cliente-nombre')?.value || '').trim(),
-    telefono: ($('cliente-telefono')?.value || '').trim(),
-    direccion: ($('cliente-direccion')?.value || '').trim(),
-    email: ($('cliente-email')?.value || '').trim(),
-    ruc: ($('cliente-ruc')?.value || '').trim()
+// --- NAV ---
+function navegar(section) {
+  currentSection = section;
+  const mapLabels = {
+    dashboard: 'Dashboard', galpones: 'Galpones', molino: 'Molino',
+    'almacen-huevos': 'Almacén de Huevos', 'almacen-insumos': 'Almacén de Insumos',
+    compras: 'Compras', ventas: 'Ventas', reportes: 'Reportes', configuracion: 'Configuración',
   };
-  if (!data.nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  try {
-    if (id) {
-      await api('PUT', '/api/clientes/' + id, data);
-      mostrarMensaje('Cliente actualizado');
-    } else {
-      await api('POST', '/api/clientes', data);
-      mostrarMensaje('Cliente creado');
-    }
-    limpiarFormCliente();
-    actualizarTablaClientes();
-    poblarSelectores();
-  } catch {}
-}
+  $('sectionTitle').textContent = mapLabels[section] || section;
 
-async function eliminarCliente(id) {
-  if (!confirm('¿Eliminar este cliente?')) return;
-  try {
-    await api('DELETE', '/api/clientes/' + id);
-    mostrarMensaje('Cliente eliminado');
-    actualizarTablaClientes();
-    poblarSelectores();
-  } catch {}
-}
+  qsa('.nav-item[data-section]').forEach(i => i.classList.toggle('active', i.dataset.section === section));
+  const subItems = qsa('.nav-sub .nav-item');
+  subItems.forEach(i => i.classList.toggle('active', i.dataset.section === section));
 
-function editarCliente(c) {
-  if ($('cliente-id')) $('cliente-id').value = c.id;
-  if ($('cliente-nombre')) $('cliente-nombre').value = c.nombre || '';
-  if ($('cliente-telefono')) $('cliente-telefono').value = c.telefono || '';
-  if ($('cliente-direccion')) $('cliente-direccion').value = c.direccion || '';
-  if ($('cliente-email')) $('cliente-email').value = c.email || '';
-  if ($('cliente-ruc')) $('cliente-ruc').value = c.ruc || '';
-}
-
-function limpiarFormCliente() {
-  ['cliente-id','cliente-nombre','cliente-telefono','cliente-direccion','cliente-email','cliente-ruc'].forEach(id => {
-    if ($(id)) $(id).value = '';
-  });
-}
-
-async function actualizarTablaClientes() {
-  const lista = await cargarClientes();
-  const tbody = $('tabla-clientes');
-  if (!tbody) return;
-  tbody.innerHTML = lista.map(c => `<tr>
-    <td>${escapeHTML(c.nombre)}</td>
-    <td>${escapeHTML(c.telefono || '')}</td>
-    <td>${escapeHTML(c.direccion || '')}</td>
-    <td>${escapeHTML(c.email || '')}</td>
-    <td>${escapeHTML(c.ruc || '')}</td>
-    <td class="table-actions">
-      <button class="btn btn-secondary" onclick='editarCliente(${JSON.stringify(c).replace(/'/g, "&#39;")});editarCliente(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>
-      <button class="btn btn-danger" onclick="eliminarCliente(${c.id})">Eliminar</button>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="6">Sin clientes</td></tr>';
-}
-
-// ==================== PROVEEDORES (CRUD dinámico) ====================
-async function cargarProveedores() {
-  try { return await api('GET', '/api/proveedores') || []; } catch { return []; }
-}
-
-async function guardarProveedor() {
-  const id = $('proveedor-id')?.value;
-  const data = {
-    nombre: ($('proveedor-nombre')?.value || '').trim(),
-    telefono: ($('proveedor-telefono')?.value || '').trim(),
-    direccion: ($('proveedor-direccion')?.value || '').trim(),
-    email: ($('proveedor-email')?.value || '').trim(),
-    ruc: ($('proveedor-ruc')?.value || '').trim()
+  const renderers = {
+    dashboard: renderDashboard,
+    galpones: renderGalpones,
+    molino: renderMolino,
+    'almacen-huevos': renderAlmacenHuevos,
+    'almacen-insumos': renderAlmacenInsumos,
+    compras: renderCompras,
+    ventas: renderVentas,
+    reportes: renderReportes,
+    configuracion: renderConfiguracion,
   };
-  if (!data.nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  try {
-    if (id) {
-      await api('PUT', '/api/proveedores/' + id, data);
-      mostrarMensaje('Proveedor actualizado');
-    } else {
-      await api('POST', '/api/proveedores', data);
-      mostrarMensaje('Proveedor creado');
-    }
-    limpiarFormProveedor();
-    actualizarTablaProveedores();
-    poblarSelectores();
-  } catch {}
+  const fn = renderers[section];
+  if (fn) fn();
+  else $('content').innerHTML = '<p>Sección no disponible</p>';
+
+  if (window.innerWidth <= 768) $('sidebar').classList.remove('open');
 }
 
-async function eliminarProveedor(id) {
-  if (!confirm('¿Eliminar este proveedor?')) return;
-  try {
-    await api('DELETE', '/api/proveedores/' + id);
-    mostrarMensaje('Proveedor eliminado');
-    actualizarTablaProveedores();
-    poblarSelectores();
-  } catch {}
-}
-
-function editarProveedor(p) {
-  if ($('proveedor-id')) $('proveedor-id').value = p.id;
-  if ($('proveedor-nombre')) $('proveedor-nombre').value = p.nombre || '';
-  if ($('proveedor-telefono')) $('proveedor-telefono').value = p.telefono || '';
-  if ($('proveedor-direccion')) $('proveedor-direccion').value = p.direccion || '';
-  if ($('proveedor-email')) $('proveedor-email').value = p.email || '';
-  if ($('proveedor-ruc')) $('proveedor-ruc').value = p.ruc || '';
-}
-
-function limpiarFormProveedor() {
-  ['proveedor-id','proveedor-nombre','proveedor-telefono','proveedor-direccion','proveedor-email','proveedor-ruc'].forEach(id => {
-    if ($(id)) $(id).value = '';
-  });
-}
-
-async function actualizarTablaProveedores() {
-  const lista = await cargarProveedores();
-  const tbody = $('tabla-proveedores');
-  if (!tbody) return;
-  tbody.innerHTML = lista.map(p => `<tr>
-    <td>${escapeHTML(p.nombre)}</td>
-    <td>${escapeHTML(p.telefono || '')}</td>
-    <td>${escapeHTML(p.direccion || '')}</td>
-    <td>${escapeHTML(p.email || '')}</td>
-    <td>${escapeHTML(p.ruc || '')}</td>
-    <td class="table-actions">
-      <button class="btn btn-secondary" onclick='editarProveedor(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Editar</button>
-      <button class="btn btn-danger" onclick="eliminarProveedor(${p.id})">Eliminar</button>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="6">Sin proveedores</td></tr>';
-}
-
-// ==================== COMPRAS ====================
-async function guardarCompra() {
-  const fecha = $('compra-fecha')?.value;
-  const provSel = $('compra-proveedor');
-  const insumoSel = $('compra-insumo');
-  const cantidad = numero($('compra-cantidad')?.value);
-  const precio = numero($('compra-precio')?.value);
-  const estado = $('compra-estado')?.value || 'pendiente';
-  if (!fecha) { mostrarMensaje('Seleccione la fecha', 'error'); return; }
-  if (!provSel || !provSel.value) { mostrarMensaje('Seleccione un proveedor', 'error'); return; }
-  if (!insumoSel || !insumoSel.value) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
-  if (cantidad <= 0 || precio <= 0) { mostrarMensaje('Ingrese cantidad y precio válidos', 'error'); return; }
-  const provId = Number(provSel.value);
-  const provNombre = provSel.options[provSel.selectedIndex]?.dataset?.nombre || provSel.options[provSel.selectedIndex]?.text || '';
-  const insumoId = Number(insumoSel.value);
-  const insumoNombre = insumoSel.options[insumoSel.selectedIndex]?.dataset?.nombre || insumoSel.options[insumoSel.selectedIndex]?.text || '';
-  try {
-    await api('POST', '/api/compras', { fecha, proveedor_id: provId, proveedor_nombre: provNombre, insumo_id: insumoId, insumo_nombre: insumoNombre, cantidad, unidad: 'kg', precio_unitario: precio, estado });
-    mostrarMensaje('Compra registrada');
-    $('compra-cantidad').value = '';
-    $('compra-precio').value = '';
-    if ($('compra-estado')) $('compra-estado').value = 'pendiente';
-    actualizarTablaCompras();
-  } catch {}
-}
-
-async function actualizarEstadoCompra(id, estado) {
-  try {
-    await api('PUT', '/api/compras/' + id, { estado });
-    mostrarMensaje('Estado actualizado');
-    actualizarTablaCompras();
-  } catch {}
-}
-
-async function eliminarCompra(id) {
-  if (!confirm('¿Eliminar esta compra?')) return;
-  try {
-    await api('DELETE', '/api/compras/' + id);
-    mostrarMensaje('Compra eliminada');
-    actualizarTablaCompras();
-  } catch {}
-}
-
-async function actualizarTablaCompras() {
-  try {
-    const lista = await api('GET', '/api/compras?estado=') || [];
-    const tbody = $('tabla-compras');
-    if (!tbody) return;
-    tbody.innerHTML = lista.map(c => `<tr>
-      <td>${c.fecha}</td>
-      <td>${escapeHTML(c.proveedor_nombre || '')}</td>
-      <td>${escapeHTML(c.insumo_nombre || '')}</td>
-      <td>${numero(c.cantidad).toFixed(2)} ${escapeHTML(c.unidad || 'kg')}</td>
-      <td>S/ ${numero(c.precio_unitario).toFixed(2)}</td>
-      <td>S/ ${(numero(c.cantidad) * numero(c.precio_unitario)).toFixed(2)}</td>
-      <td><span class="estado-stock ${c.estado === 'recibido' ? 'estado-correcto' : 'estado-advertencia'}">${escapeHTML(c.estado || 'pendiente')}</span></td>
-      <td class="table-actions">
-        ${c.estado !== 'recibido' ? `<button class="btn btn-primary" onclick="actualizarEstadoCompra(${c.id},'recibido')">Recibir</button>` : ''}
-        <button class="btn btn-danger" onclick="eliminarCompra(${c.id})">Eliminar</button>
-      </td>
-    </tr>`).join('') || '<tr><td colspan="8">Sin compras</td></tr>';
-  } catch {}
-}
-
-// ==================== EMPLEADOS (CRUD dinámico) ====================
-async function cargarEmpleados() {
-  try { return await api('GET', '/api/empleados') || []; } catch { return []; }
-}
-
-async function guardarEmpleado() {
-  const id = $('empleado-id')?.value;
-  const data = {
-    nombre: ($('empleado-nombre')?.value || '').trim(),
-    telefono: ($('empleado-telefono')?.value || '').trim(),
-    direccion: ($('empleado-direccion')?.value || '').trim(),
-    cargo: ($('empleado-cargo')?.value || '').trim(),
-    salario: numero($('empleado-salario')?.value),
-    fecha_ingreso: $('empleado-fecha')?.value || ''
-  };
-  if (!data.nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  try {
-    if (id) {
-      await api('PUT', '/api/empleados/' + id, data);
-      mostrarMensaje('Empleado actualizado');
-    } else {
-      await api('POST', '/api/empleados', data);
-      mostrarMensaje('Empleado creado');
-    }
-    limpiarFormEmpleado();
-    actualizarTablaEmpleados();
-  } catch {}
-}
-
-async function eliminarEmpleado(id) {
-  if (!confirm('¿Eliminar este empleado?')) return;
-  try {
-    await api('DELETE', '/api/empleados/' + id);
-    mostrarMensaje('Empleado eliminado');
-    actualizarTablaEmpleados();
-  } catch {}
-}
-
-function editarEmpleado(e) {
-  if ($('empleado-id')) $('empleado-id').value = e.id;
-  if ($('empleado-nombre')) $('empleado-nombre').value = e.nombre || '';
-  if ($('empleado-telefono')) $('empleado-telefono').value = e.telefono || '';
-  if ($('empleado-direccion')) $('empleado-direccion').value = e.direccion || '';
-  if ($('empleado-cargo')) $('empleado-cargo').value = e.cargo || '';
-  if ($('empleado-salario')) $('empleado-salario').value = e.salario || '';
-  if ($('empleado-fecha')) $('empleado-fecha').value = e.fecha_ingreso || '';
-}
-
-function limpiarFormEmpleado() {
-  ['empleado-id','empleado-nombre','empleado-telefono','empleado-direccion','empleado-cargo','empleado-salario','empleado-fecha'].forEach(id => {
-    if ($(id)) $(id).value = '';
-  });
-}
-
-async function actualizarTablaEmpleados() {
-  const lista = await cargarEmpleados();
-  const tbody = $('tabla-empleados');
-  if (!tbody) return;
-  tbody.innerHTML = lista.map(e => `<tr>
-    <td>${escapeHTML(e.nombre)}</td>
-    <td>${escapeHTML(e.telefono || '')}</td>
-    <td>${escapeHTML(e.direccion || '')}</td>
-    <td>${escapeHTML(e.cargo || '')}</td>
-    <td>S/ ${numero(e.salario).toFixed(2)}</td>
-    <td>${e.fecha_ingreso || ''}</td>
-    <td class="table-actions">
-      <button class="btn btn-secondary" onclick='editarEmpleado(${JSON.stringify(e).replace(/'/g, "&#39;")})'>Editar</button>
-      <button class="btn btn-danger" onclick="eliminarEmpleado(${e.id})">Eliminar</button>
-    </td>
-  </tr>`).join('') || '<tr><td colspan="7">Sin empleados</td></tr>';
-}
-
-// ==================== REPORTES ====================
-async function actualizarReportes() {
-  try {
-    const gral = await api('GET', '/api/reportes/resumen-general');
-    if (gral) {
-      if ($('rep-total-gallinas')) $('rep-total-gallinas').textContent = (gral.total_gallinas || 0).toLocaleString();
-      if ($('rep-produccion-total')) $('rep-produccion-total').textContent = formatoJabas(gral.produccion_total || 0) + ' jabas';
-      if ($('rep-ventas-total')) $('rep-ventas-total').textContent = 'S/ ' + (gral.ventas_total || 0).toFixed(2);
-      if ($('rep-stock-huevos')) $('rep-stock-huevos').textContent = formatoJabas(gral.stock_huevos || 0) + ' jabas';
-      if ($('rep-stock-alimento')) $('rep-stock-alimento').textContent = (gral.stock_alimento_sacos || 0).toFixed(0) + ' sacos';
-    }
-  } catch {}
-
-  // Producción resumen (chart)
-  try {
-    const desde = $('rep-prod-desde')?.value || '';
-    const hasta = $('rep-prod-hasta')?.value || '';
-    const params = new URLSearchParams();
-    if (desde) params.set('desde', desde);
-    if (hasta) params.set('hasta', hasta);
-    const prodData = await api('GET', '/api/reportes/produccion-resumen?' + params.toString()) || [];
-    const tbody = $('tabla-reporte-produccion');
-    const chartDiv = $('chart-produccion');
-    if (tbody) {
-      tbody.innerHTML = prodData.map(p => `<tr>
-        <td>${p.fecha}</td>
-        <td>${formatoJabas(p.total_jabas)}</td>
-        <td>${formatoJabas(p.primera)}</td>
-        <td>${formatoJabas(p.segunda)}</td>
-        <td>${p.muertas || 0}</td>
-      </tr>`).join('') || '<tr><td colspan="5">Sin datos</td></tr>';
-    }
-    if (chartDiv) {
-      const maxJabas = Math.max(...prodData.map(p => numero(p.total_jabas)), 1);
-      chartDiv.innerHTML = prodData.map(p => {
-        const h = (numero(p.total_jabas) / maxJabas) * 100;
-        return `<div style="display:flex;align-items:center;margin-bottom:4px;">
-          <span style="width:80px;font-size:0.8rem;">${escapeHTML(p.fecha || '')}</span>
-          <div style="flex:1;background:#e9ecef;border-radius:4px;height:20px;overflow:hidden;">
-            <div style="height:100%;width:${h.toFixed(0)}%;background:#008080;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:white;font-size:0.75rem;font-weight:700;min-width:${h > 5 ? '0' : '100%'};">
-              ${h > 5 ? formatoJabas(p.total_jabas) : ''}
-            </div>
-          </div>
-        </div>`;
-      }).join('') || '<p>Sin datos para el gráfico</p>';
-    }
-  } catch {}
-
-  // Ventas resumen
-  try {
-    const desde = $('rep-ventas-desde')?.value || '';
-    const hasta = $('rep-ventas-hasta')?.value || '';
-    const params = new URLSearchParams();
-    if (desde) params.set('desde', desde);
-    if (hasta) params.set('hasta', hasta);
-    const ventasData = await api('GET', '/api/reportes/ventas-resumen?' + params.toString()) || [];
-    const tbody = $('tabla-reporte-ventas');
-    const chartDiv = $('chart-ventas');
-    if (tbody) {
-      tbody.innerHTML = ventasData.map(v => `<tr>
-        <td>${v.fecha}</td>
-        <td>${formatoJabas(v.total_jabas)}</td>
-        <td>${v.total_ventas !== undefined ? 'S/ ' + Number(v.total_ventas).toFixed(2) : '-'}</td>
-      </tr>`).join('') || '<tr><td colspan="3">Sin datos</td></tr>';
-    }
-    if (chartDiv) {
-      const maxVentas = Math.max(...ventasData.map(v => numero(v.total_ventas)), 1);
-      chartDiv.innerHTML = ventasData.map(v => {
-        const h = (numero(v.total_ventas) / maxVentas) * 100;
-        return `<div style="display:flex;align-items:center;margin-bottom:4px;">
-          <span style="width:80px;font-size:0.8rem;">${escapeHTML(v.fecha || '')}</span>
-          <div style="flex:1;background:#e9ecef;border-radius:4px;height:20px;overflow:hidden;">
-            <div style="height:100%;width:${h.toFixed(0)}%;background:#ff8c00;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:white;font-size:0.75rem;font-weight:700;">
-              ${h > 5 ? 'S/ ' + Number(v.total_ventas).toFixed(0) : ''}
-            </div>
-          </div>
-        </div>`;
-      }).join('') || '<p>Sin datos</p>';
-    }
-  } catch {}
-
-  // Rendimiento
-  const rendGalpon = $('rendimiento-galpon')?.value;
-  try {
-    const params = new URLSearchParams();
-    if (rendGalpon) params.set('galpon_id', rendGalpon);
-    const rendData = await api('GET', '/api/reportes/rendimiento?' + params.toString()) || [];
-    const tbody = $('tabla-rendimiento-galpon');
-    if (tbody) {
-      tbody.innerHTML = rendData.map(r => `<tr>
-        <td>${r.fecha}</td>
-        <td>${escapeHTML(r.galpon_nombre || nombreGalponPorId(r.galpon_id))}</td>
-        <td>${formatoJabas(r.jabas || 0)} jabas</td>
-        <td>${r.gallinas || 0}</td>
-        <td>${r.rendimiento !== undefined ? Number(r.rendimiento).toFixed(2) : ((r.gallinas > 0 ? (numero(r.jabas) * 360) / r.gallinas : 0).toFixed(2))}</td>
-      </tr>`).join('') || '<tr><td colspan="5">Sin datos</td></tr>';
-    }
-  } catch {}
-}
-
-// ==================== ALERTAS ====================
-async function generarAlertas() {
-  try {
-    const alertas = await api('GET', '/api/alertas/generar');
-    const cont = $('alertas-generadas');
-    if (!cont) return;
-    if (!alertas || alertas.length === 0) {
-      cont.innerHTML = '<div class="alert ok">Sin alertas generadas</div>';
-    } else {
-      cont.innerHTML = alertas.map(a =>
-        `<div class="alert danger">${escapeHTML(a.mensaje || a.titulo || '')}</div>`
-      ).join('');
-    }
-  } catch {}
-}
-
-async function actualizarNotificaciones() {
-  try {
-    const notis = await api('GET', '/api/alertas/notificaciones') || [];
-    const cont = $('tabla-notificaciones');
-    if (!cont) return;
-    cont.innerHTML = notis.map(n => `<tr class="${n.leida ? '' : 'no-leida'}">
-      <td>${n.fecha || ''}</td>
-      <td>${escapeHTML(n.mensaje || n.titulo || '')}</td>
-      <td>${n.leida ? 'Leída' : '<button class="btn btn-secondary" onclick="marcarLeida(' + n.id + ')">Marcar leída</button>'}</td>
-    </tr>`).join('') || '<tr><td colspan="3">Sin notificaciones</td></tr>';
-  } catch {}
-}
-
-async function marcarLeida(id) {
-  try {
-    await api('PUT', '/api/alertas/notificaciones/' + id + '/leer');
-    mostrarMensaje('Notificación marcada como leída');
-    actualizarNotificaciones();
-  } catch {}
-}
-
-// ==================== ADMIN: GALPONES ====================
-async function agregarGalpon() {
-  const nombre = ($('admin-galpon-nombre')?.value || '').trim();
-  const gallinas = numero($('admin-galpon-gallinas')?.value);
-  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  try {
-    await api('POST', '/api/galpones', { nombre, gallinas });
-    mostrarMensaje('Galpón agregado');
-    $('admin-galpon-nombre').value = '';
-    $('admin-galpon-gallinas').value = '';
-    await cargarGalpones();
-    poblarSelectores();
-    actualizarTablaGalpones();
-  } catch {}
-}
-
-async function cargarGalponParaEditar() {
-  const sel = $('admin-galpon-editar-select');
-  if (!sel) return;
-  const id = Number(sel.value);
-  const g = galponesCache.find(x => x.id === id);
-  if ($('admin-galpon-editar-nombre')) $('admin-galpon-editar-nombre').value = g ? g.nombre : '';
-  if ($('admin-galpon-editar-gallinas')) $('admin-galpon-editar-gallinas').value = g ? g.gallinas : '';
-}
-
-async function guardarCambiosGalpon() {
-  const sel = $('admin-galpon-editar-select');
-  if (!sel) return;
-  const id = Number(sel.value);
-  const nombre = ($('admin-galpon-editar-nombre')?.value || '').trim();
-  const gallinas = numero($('admin-galpon-editar-gallinas')?.value);
-  if (!id) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
-  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  try {
-    await api('PUT', '/api/galpones/' + id, { nombre, gallinas });
-    mostrarMensaje('Galpón actualizado');
-    await cargarGalpones();
-    poblarSelectores();
-    actualizarTablaGalpones();
-  } catch {}
-}
-
-async function eliminarGalponAdmin() {
-  const sel = $('admin-galpon-eliminar');
-  if (!sel) return;
-  const id = Number(sel.value);
-  if (!id) { mostrarMensaje('Seleccione un galpón', 'error'); return; }
-  if (!confirm('¿Eliminar este galpón?')) return;
-  try {
-    await api('DELETE', '/api/galpones/' + id);
-    mostrarMensaje('Galpón eliminado');
-    await cargarGalpones();
-    poblarSelectores();
-    actualizarTablaGalpones();
-  } catch {}
-}
-
-function actualizarTablaGalpones() {
-  const tbody = $('tabla-galpones');
-  if (!tbody) return;
-  tbody.innerHTML = galponesCache.map(g => `<tr>
-    <td>${escapeHTML(g.nombre)}</td>
-    <td>${g.gallinas || 0}</td>
-    <td>${g.alimento_kg ? (g.alimento_kg / 50).toFixed(0) + ' sacos' : '0 sacos'}</td>
-  </tr>`).join('') || '<tr><td colspan="3">Sin galpones</td></tr>';
-}
-
-// ==================== ADMIN: INSUMOS ====================
-function obtenerInfoPorPresentacion(tipo) {
-  const map = {
-    toneladas: { unidad_compra: 'toneladas', kg_por_unidad: 1000, etiqueta: 'Granel' },
-    sacos50: { unidad_compra: 'sacos de 50 kg', kg_por_unidad: 50, etiqueta: 'Saco 50 kg' },
-    tanques1000: { unidad_compra: 'tanques de 1000 L', kg_por_unidad: 1000, etiqueta: 'Litros' },
-    sacos25: { unidad_compra: 'sacos de 25 kg', kg_por_unidad: 25, etiqueta: 'Saco 25 kg' },
-    kg: { unidad_compra: 'kg', kg_por_unidad: 1, etiqueta: 'Kg' }
-  };
-  return map[tipo] || map.kg;
-}
-
-async function agregarNuevoInsumo() {
-  const nombre = ($('nuevo-insumo-nombre')?.value || '').trim().toUpperCase();
-  const presentacion = $('nuevo-insumo-presentacion')?.value || 'kg';
-  const cantidad = numero($('nuevo-insumo-stock')?.value);
-  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  const info = obtenerInfoPorPresentacion(presentacion);
-  try {
-    await api('POST', '/api/insumos', {
-      nombre,
-      cantidad_kg: cantidad * info.kg_por_unidad,
-      unidad_compra: info.unidad_compra,
-      kg_por_unidad: info.kg_por_unidad,
-      etiqueta: info.etiqueta,
-      stock_minimo_kg: info.kg_por_unidad
-    });
-    mostrarMensaje('Insumo creado');
-    $('nuevo-insumo-nombre').value = '';
-    $('nuevo-insumo-stock').value = '0';
-    poblarSelectores();
-    actualizarInsumos();
-  } catch {}
-}
-
-async function eliminarInsumoAdmin() {
-  const sel = $('admin-insumo-eliminar');
-  if (!sel) return;
-  const id = Number(sel.value);
-  if (!id) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
-  if (!confirm('¿Eliminar este insumo?')) return;
-  try {
-    await api('DELETE', '/api/insumos/' + id);
-    mostrarMensaje('Insumo eliminado');
-    poblarSelectores();
-    actualizarInsumos();
-  } catch {}
-}
-
-// ==================== ADMIN: FÓRMULAS ====================
-async function cargarEditorFormula() {
-  const sel = $('edit-formula');
-  const preview = $('editor-formula-preview');
-  if (!sel) return;
-  const id = Number(sel.value);
-  if (!id) {
-    if (preview) preview.innerHTML = '<p>Seleccione una fórmula</p>';
-    return;
-  }
-  try {
-    const formulas = await cargarFormulasMolino();
-    const f = formulas.find(x => x.id === id);
-    if (!f) {
-      if (preview) preview.innerHTML = '<p>Fórmula no encontrada</p>';
-      return;
-    }
-    const insumos = f.insumos || [];
-    if (preview) {
-      preview.innerHTML = insumos.length
-        ? insumos.map(i => `<div class="formula-item">
-            <strong>${escapeHTML(i.insumo_nombre || '')}</strong>
-            <span>${numero(i.kg_por_tanda).toFixed(2)} kg por tanda</span>
-          </div>`).join('')
-        : '<p>Esta fórmula no tiene insumos</p>';
-    }
-  } catch {}
-}
-
-async function crearFormula() {
-  const nombre = ($('nueva-formula-nombre')?.value || '').trim();
-  const galponId = Number($('molino-galpon')?.value);
-  if (!nombre) { mostrarMensaje('Ingrese el nombre', 'error'); return; }
-  if (!galponId) { mostrarMensaje('Seleccione un galpón destino', 'error'); return; }
-  try {
-    await api('POST', '/api/molino/formulas', { nombre, galpon_id: galponId });
-    mostrarMensaje('Fórmula creada');
-    $('nueva-formula-nombre').value = '';
-    poblarSelectores();
-  } catch {}
-}
-
-async function eliminarFormulaAdmin() {
-  const sel = $('edit-formula');
-  if (!sel) return;
-  const id = Number(sel.value);
-  if (!id) { mostrarMensaje('Seleccione una fórmula', 'error'); return; }
-  if (!confirm('¿Eliminar esta fórmula?')) return;
-  try {
-    await api('DELETE', '/api/molino/formulas/' + id);
-    mostrarMensaje('Fórmula eliminada');
-    poblarSelectores();
-    if ($('editor-formula-preview')) $('editor-formula-preview').innerHTML = '';
-  } catch {}
-}
-
-async function agregarInsumoFormula() {
-  const formulaId = Number($('edit-formula')?.value);
-  const insumoId = Number($('edit-formula-insumo')?.value);
-  const kg = numero($('edit-formula-kg')?.value);
-  if (!formulaId) { mostrarMensaje('Seleccione una fórmula', 'error'); return; }
-  if (!insumoId) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
-  if (kg <= 0) { mostrarMensaje('Ingrese kg por tanda', 'error'); return; }
-  try {
-    await api('POST', '/api/molino/formulas/' + formulaId + '/insumos', { insumo_id: insumoId, kg_por_tanda: kg });
-    mostrarMensaje('Insumo agregado a la fórmula');
-    $('edit-formula-kg').value = '';
-    cargarEditorFormula();
-  } catch {}
-}
-
-async function quitarInsumoFormula() {
-  const formulaId = Number($('edit-formula')?.value);
-  const insumoId = Number($('edit-formula-insumo')?.value);
-  if (!formulaId) { mostrarMensaje('Seleccione una fórmula', 'error'); return; }
-  if (!insumoId) { mostrarMensaje('Seleccione un insumo', 'error'); return; }
-  // We need to find the formula-insumo id. For now, let's just use insumo_id
-  try {
-    await api('DELETE', '/api/molino/formulas/' + formulaId + '/insumos/' + insumoId);
-    mostrarMensaje('Insumo quitado de la fórmula');
-    cargarEditorFormula();
-  } catch {}
-}
-
-// ==================== ACTUALIZAR TODO ====================
-async function actualizarTodo() {
-  await cargarGalpones();
-  actualizarDashboard();
-  actualizarTablaProduccion();
-  actualizarAlmacenHuevos();
-  actualizarMovimientosHuevos();
-  actualizarClasesSegunda();
-  actualizarInsumos();
-  actualizarAlimentoBalanceado();
-  actualizarMovimientosAlimento();
-  actualizarTablaMolino();
-  actualizarTablaVentas();
-  actualizarTablaGalpones();
-  // Reportes / rendimiento
-  actualizarReportes();
-  // Alertas
-  generarAlertas();
-  actualizarNotificaciones();
-  // CRUD tables
-  actualizarTablaClientes();
-  actualizarTablaProveedores();
-  actualizarTablaCompras();
-  actualizarTablaEmpleados();
-}
-
-// ==================== INYECTAR SECCIONES FALTANTES EN EL HTML ====================
-function inyectarSeccionesFaltantes() {
-  const main = document.querySelector('.content');
-  const menu = document.querySelector('.menu');
-  if (!main || !menu) return;
-
-  // Secciones que no existen en el HTML original
-  const nuevasSecciones = [
-    {
-      tab: 'clientes',
-      titulo: 'Clientes',
-      html: `
-        <h2>Clientes</h2>
-        <div class="box">
-          <h3 id="titulo-form-cliente">Nuevo cliente</h3>
-          <input type="hidden" id="cliente-id">
-          <div class="form-grid">
-            <div><label>Nombre</label><input type="text" id="cliente-nombre" placeholder="Nombre del cliente"></div>
-            <div><label>Teléfono</label><input type="text" id="cliente-telefono" placeholder="Teléfono"></div>
-            <div><label>Dirección</label><input type="text" id="cliente-direccion" placeholder="Dirección"></div>
-            <div><label>Email</label><input type="text" id="cliente-email" placeholder="Email"></div>
-            <div><label>RUC</label><input type="text" id="cliente-ruc" placeholder="RUC"></div>
-          </div>
-          <button class="btn btn-primary" id="btn-guardar-cliente" onclick="guardarCliente()">Guardar cliente</button>
-          <button class="btn btn-light" onclick="limpiarFormCliente();$('titulo-form-cliente').textContent='Nuevo cliente'">Cancelar</button>
-        </div>
-        <div class="table-box">
-          <h3>Lista de clientes</h3>
-          <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Email</th><th>RUC</th><th>Acción</th></tr></thead>
-          <tbody id="tabla-clientes"></tbody></table>
-        </div>
-      `
-    },
-    {
-      tab: 'proveedores',
-      titulo: 'Proveedores',
-      html: `
-        <h2>Proveedores</h2>
-        <div class="box">
-          <h3 id="titulo-form-proveedor">Nuevo proveedor</h3>
-          <input type="hidden" id="proveedor-id">
-          <div class="form-grid">
-            <div><label>Nombre</label><input type="text" id="proveedor-nombre" placeholder="Nombre del proveedor"></div>
-            <div><label>Teléfono</label><input type="text" id="proveedor-telefono" placeholder="Teléfono"></div>
-            <div><label>Dirección</label><input type="text" id="proveedor-direccion" placeholder="Dirección"></div>
-            <div><label>Email</label><input type="text" id="proveedor-email" placeholder="Email"></div>
-            <div><label>RUC</label><input type="text" id="proveedor-ruc" placeholder="RUC"></div>
-          </div>
-          <button class="btn btn-primary" id="btn-guardar-proveedor" onclick="guardarProveedor()">Guardar proveedor</button>
-          <button class="btn btn-light" onclick="limpiarFormProveedor();$('titulo-form-proveedor').textContent='Nuevo proveedor'">Cancelar</button>
-        </div>
-        <div class="table-box">
-          <h3>Lista de proveedores</h3>
-          <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Email</th><th>RUC</th><th>Acción</th></tr></thead>
-          <tbody id="tabla-proveedores"></tbody></table>
-        </div>
-      `
-    },
-    {
-      tab: 'compras',
-      titulo: 'Compras',
-      html: `
-        <h2>Compras</h2>
-        <div class="box">
-          <h3>Registrar compra</h3>
-          <div class="form-grid">
-            <div><label>Fecha</label><input type="date" id="compra-fecha"></div>
-            <div><label>Proveedor</label><select id="compra-proveedor"><option value="">-- Seleccione --</option></select></div>
-            <div><label>Insumo</label><select id="compra-insumo"><option value="">-- Seleccione --</option></select></div>
-            <div><label>Cantidad</label><input type="number" id="compra-cantidad" min="0" step="0.01" placeholder="kg"></div>
-            <div><label>Precio unitario</label><input type="number" id="compra-precio" min="0" step="0.01" placeholder="S/"></div>
-            <div><label>Estado</label><select id="compra-estado"><option value="pendiente">Pendiente</option><option value="recibido">Recibido</option></select></div>
-          </div>
-          <button class="btn btn-primary" id="btn-guardar-compra" onclick="guardarCompra()">Registrar compra</button>
-        </div>
-        <div class="table-box">
-          <h3>Historial de compras</h3>
-          <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Insumo</th><th>Cantidad</th><th>Precio unit.</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead>
-          <tbody id="tabla-compras"></tbody></table>
-        </div>
-      `
-    },
-    {
-      tab: 'empleados',
-      titulo: 'Empleados',
-      html: `
-        <h2>Empleados</h2>
-        <div class="box">
-          <h3 id="titulo-form-empleado">Nuevo empleado</h3>
-          <input type="hidden" id="empleado-id">
-          <div class="form-grid">
-            <div><label>Nombre</label><input type="text" id="empleado-nombre" placeholder="Nombre"></div>
-            <div><label>Teléfono</label><input type="text" id="empleado-telefono" placeholder="Teléfono"></div>
-            <div><label>Dirección</label><input type="text" id="empleado-direccion" placeholder="Dirección"></div>
-            <div><label>Cargo</label><input type="text" id="empleado-cargo" placeholder="Cargo"></div>
-            <div><label>Salario</label><input type="number" id="empleado-salario" min="0" step="0.01" placeholder="S/"></div>
-            <div><label>Fecha ingreso</label><input type="date" id="empleado-fecha"></div>
-          </div>
-          <button class="btn btn-primary" id="btn-guardar-empleado" onclick="guardarEmpleado()">Guardar empleado</button>
-          <button class="btn btn-light" onclick="limpiarFormEmpleado();$('titulo-form-empleado').textContent='Nuevo empleado'">Cancelar</button>
-        </div>
-        <div class="table-box">
-          <h3>Lista de empleados</h3>
-          <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Cargo</th><th>Salario</th><th>Fecha ingreso</th><th>Acción</th></tr></thead>
-          <tbody id="tabla-empleados"></tbody></table>
-        </div>
-      `
-    },
-    {
-      tab: 'reportes',
-      titulo: 'Reportes',
-      html: `
-        <h2>Reportes</h2>
-        <div class="cards-grid">
-          <div class="card"><span>Total gallinas</span><strong id="rep-total-gallinas">0</strong></div>
-          <div class="card"><span>Producción total</span><strong id="rep-produccion-total">0 jabas</strong></div>
-          <div class="card"><span>Ventas totales</span><strong id="rep-ventas-total">S/ 0.00</strong></div>
-          <div class="card"><span>Stock huevos</span><strong id="rep-stock-huevos">0 jabas</strong></div>
-          <div class="card"><span>Stock alimento</span><strong id="rep-stock-alimento">0 sacos</strong></div>
-        </div>
-
-        <div class="box">
-          <h3>Producción por fecha</h3>
-          <div class="form-grid">
-            <div><label>Desde</label><input type="date" id="rep-prod-desde"></div>
-            <div><label>Hasta</label><input type="date" id="rep-prod-hasta"></div>
-          </div>
-          <button class="btn btn-secondary" onclick="actualizarReportes()">Filtrar</button>
-          <h4 style="margin-top:16px;">Gráfico de producción</h4>
-          <div id="chart-produccion"></div>
-          <div class="table-box" style="margin-top:12px;">
-            <table><thead><tr><th>Fecha</th><th>Total jabas</th><th>Primera</th><th>Segunda</th><th>Muertas</th></tr></thead>
-            <tbody id="tabla-reporte-produccion"></tbody></table>
-          </div>
-        </div>
-
-        <div class="box">
-          <h3>Ventas por fecha</h3>
-          <div class="form-grid">
-            <div><label>Desde</label><input type="date" id="rep-ventas-desde"></div>
-            <div><label>Hasta</label><input type="date" id="rep-ventas-hasta"></div>
-          </div>
-          <button class="btn btn-secondary" onclick="actualizarReportes()">Filtrar</button>
-          <h4 style="margin-top:16px;">Gráfico de ventas</h4>
-          <div id="chart-ventas"></div>
-          <div class="table-box" style="margin-top:12px;">
-            <table><thead><tr><th>Fecha</th><th>Total jabas</th><th>Total ventas</th></tr></thead>
-            <tbody id="tabla-reporte-ventas"></tbody></table>
-          </div>
-        </div>
-      `
-    },
-    {
-      tab: 'alertas',
-      titulo: 'Alertas',
-      html: `
-        <h2>Alertas</h2>
-        <div class="box">
-          <h3>Alertas generadas</h3>
-          <button class="btn btn-secondary" onclick="generarAlertas()">Generar alertas</button>
-          <div id="alertas-generadas" style="margin-top:12px;"></div>
-        </div>
-        <div class="table-box">
-          <h3>Historial de notificaciones</h3>
-          <button class="btn btn-secondary" onclick="actualizarNotificaciones()">Actualizar</button>
-          <table><thead><tr><th>Fecha</th><th>Mensaje</th><th>Estado</th></tr></thead>
-          <tbody id="tabla-notificaciones"></tbody></table>
-        </div>
-      `
-    }
-  ];
-
-  // Verificar qué secciones ya existen
-  nuevasSecciones.forEach(sec => {
-    if (!document.getElementById('tab-' + sec.tab)) {
-      // Add nav button
-      const btn = document.createElement('button');
-      btn.className = 'nav-btn';
-      btn.dataset.tab = sec.tab;
-      btn.textContent = sec.titulo;
-      menu.appendChild(btn);
-
-      // Add section
-      const section = document.createElement('section');
-      section.id = 'tab-' + sec.tab;
-      section.className = 'tab-content';
-      section.innerHTML = sec.html;
-      main.appendChild(section);
-    }
-  });
-
-  // Set default dates
-  if ($('compra-fecha')) $('compra-fecha').value = hoy();
-  if ($('empleado-fecha')) $('empleado-fecha').value = hoy();
-}
-
-// ==================== EVENT LISTENERS ====================
-document.addEventListener('DOMContentLoaded', async () => {
-  // Inyectar secciones faltantes
-  inyectarSeccionesFaltantes();
-
-  // Fechas por defecto
-  if ($('prod-fecha')) $('prod-fecha').value = hoy();
-  if ($('molino-fecha')) $('molino-fecha').value = hoy();
-  if ($('venta-fecha')) $('venta-fecha').value = hoy();
-  if ($('rep-prod-desde')) $('rep-prod-desde').value = hoy();
-  if ($('rep-prod-hasta')) $('rep-prod-hasta').value = hoy();
-  if ($('rep-ventas-desde')) $('rep-ventas-desde').value = hoy();
-  if ($('rep-ventas-hasta')) $('rep-ventas-hasta').value = hoy();
-
-  // Login
-  if ($('btn-login')) $('btn-login').addEventListener('click', iniciarSesion);
-  if ($('login-pass')) $('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') iniciarSesion(); });
-  if ($('btn-logout')) $('btn-logout').addEventListener('click', cerrarSesion);
-
-  // Navegación
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
-  });
-
-  // Producción
-  if ($('btn-guardar-produccion')) $('btn-guardar-produccion').addEventListener('click', guardarProduccion);
-  if ($('btn-filtrar-produccion')) $('btn-filtrar-produccion').addEventListener('click', filtrarProduccion);
-  if ($('btn-limpiar-filtro-produccion')) $('btn-limpiar-filtro-produccion').addEventListener('click', limpiarFiltroProduccion);
-  if ($('prod-jabas-primera')) $('prod-jabas-primera').addEventListener('input', actualizarPaquetesProduccion);
-  if ($('prod-jabas-segunda')) $('prod-jabas-segunda').addEventListener('input', actualizarPaquetesProduccion);
-  actualizarPaquetesProduccion();
-
-  // Almacén huevos
-  if ($('btn-guardar-clases-segunda')) $('btn-guardar-clases-segunda').addEventListener('click', guardarClasificacionSegunda);
-
-  // Almacén insumos / alimento
-  if ($('btn-ingresar-insumo')) $('btn-ingresar-insumo').addEventListener('click', ingresarInsumo);
-  if ($('btn-agregar-insumo')) $('btn-agregar-insumo').addEventListener('click', agregarNuevoInsumo);
-  if ($('btn-eliminar-insumo')) $('btn-eliminar-insumo').addEventListener('click', eliminarInsumoAdmin);
-  if ($('btn-consumir-alimento')) $('btn-consumir-alimento').addEventListener('click', consumirAlimento);
-
-  // Ventas
-  ['venta-primera','venta-segunda','venta-promedio-kg-jaba','venta-precio-primera','venta-precio-segunda'].forEach(id => {
-    const el = $(id);
-    if (el) el.addEventListener('input', calcularTotalVenta);
-  });
-  if ($('btn-guardar-venta')) $('btn-guardar-venta').addEventListener('click', guardarVenta);
-  calcularTotalVenta();
-
-  // Molino
-  if ($('molino-galpon')) $('molino-galpon').addEventListener('change', actualizarFormulaMolinoPorGalpon);
-  if ($('btn-ver-formula')) $('btn-ver-formula').addEventListener('click', verFormulaMolino);
-  if ($('btn-producir-molino')) $('btn-producir-molino').addEventListener('click', producirMolino);
-  if ($('btn-cerrar-dia')) $('btn-cerrar-dia').addEventListener('click', () => mostrarMensaje('Función de cierre diario no implementada en el servidor', 'error'));
-
-  // Admin: galpones
-  if ($('btn-admin-agregar-galpon')) $('btn-admin-agregar-galpon').addEventListener('click', agregarGalpon);
-  if ($('btn-admin-cargar-galpon')) $('btn-admin-cargar-galpon').addEventListener('click', cargarGalponParaEditar);
-  if ($('btn-admin-guardar-galpon')) $('btn-admin-guardar-galpon').addEventListener('click', guardarCambiosGalpon);
-  if ($('btn-admin-eliminar-galpon')) $('btn-admin-eliminar-galpon').addEventListener('click', eliminarGalponAdmin);
-  if ($('admin-galpon-editar-select')) $('admin-galpon-editar-select').addEventListener('change', cargarGalponParaEditar);
-
-  // Admin: insumos
-  if ($('btn-agregar-insumo')) $('btn-agregar-insumo').addEventListener('click', agregarNuevoInsumo);
-  if ($('btn-eliminar-insumo')) $('btn-eliminar-insumo').addEventListener('click', eliminarInsumoAdmin);
-
-  // Admin: fórmulas
-  if ($('edit-formula')) $('edit-formula').addEventListener('change', cargarEditorFormula);
-  if ($('btn-guardar-formula-destino')) $('btn-guardar-formula-destino').addEventListener('click', () => mostrarMensaje('Edite el galpón de la fórmula desde la sección de galpones', 'error'));
-  if ($('btn-agregar-formula-insumo')) $('btn-agregar-formula-insumo').addEventListener('click', agregarInsumoFormula);
-  if ($('btn-quitar-formula-insumo')) $('btn-quitar-formula-insumo').addEventListener('click', quitarInsumoFormula);
-  if ($('btn-crear-formula')) $('btn-crear-formula').addEventListener('click', crearFormula);
-  if ($('btn-eliminar-formula')) $('btn-eliminar-formula').addEventListener('click', eliminarFormulaAdmin);
-
-  // Rendimiento / Reportes
-  if ($('rendimiento-galpon')) $('rendimiento-galpon').addEventListener('change', () => actualizarReportes());
-  if ($('btn-ver-rendimiento')) $('btn-ver-rendimiento').addEventListener('click', () => actualizarReportes());
-  if ($('btn-exportar-rendimiento')) $('btn-exportar-rendimiento').addEventListener('click', () => mostrarMensaje('Exportación a Excel deshabilitada en versión API', 'error'));
-
-  // Accesibilidad
-  if ($('btn-text-small')) $('btn-text-small').addEventListener('click', () => cambiarTamanoTexto(-1));
-  if ($('btn-text-big')) $('btn-text-big').addEventListener('click', () => cambiarTamanoTexto(1));
-  if ($('btn-text-reset')) $('btn-text-reset').addEventListener('click', resetTamanoTexto);
-  cargarTamanoTexto();
-
-  // Cliente select auto-fill name in ventas
-  if ($('venta-cliente-select')) {
-    $('venta-cliente-select').addEventListener('change', function() {
-      const opt = this.options[this.selectedIndex];
-      if ($('venta-cliente')) {
-        $('venta-cliente').value = opt && opt.value ? (opt.dataset.nombre || opt.text) : '';
-      }
-    });
-  }
-
-  // Check session from server or redirect
-  // Simple: no stored session - show login
-  if (sessionStorage.getItem('avicola_session')) {
+// --- INIT ---
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('erp_sesion');
+  if (saved) {
     try {
-      session = JSON.parse(sessionStorage.getItem('avicola_session'));
-      await cargarGalpones();
-      poblarSelectores();
-      mostrarAplicacion();
-    } catch {
-      sessionStorage.removeItem('avicola_session');
-    }
+      sesion = JSON.parse(saved);
+      aplicarSesion();
+    } catch { mostrarLogin(); }
+  } else {
+    mostrarLogin();
   }
+
+  $('hamburger').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+  $('btnLogout').addEventListener('click', cerrarSesion);
+
+  document.querySelectorAll('.nav-item[data-section]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (el.nextElementSibling?.classList.contains('nav-sub')) {
+        const arrow = el.querySelector('.arrow');
+        if (arrow) arrow.classList.toggle('open');
+        el.nextElementSibling.classList.toggle('open');
+      }
+      const section = el.dataset.section;
+      if (section && !el.closest('.nav-sub') && el.nextElementSibling?.classList.contains('nav-sub')) return;
+      if (section) navegar(section);
+    });
+  });
+
+  document.querySelectorAll('.nav-sub .nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+      if (el.dataset.section) navegar(el.dataset.section);
+    });
+  });
 });
 
-// Sobreescribir iniciarSesion para guardar en sessionStorage
-const _originalLogin = iniciarSesion;
-iniciarSesion = async function() {
-  const usuario = ($('login-user')?.value || '').trim();
-  const clave = ($('login-pass')?.value || '').trim();
-  if (!usuario || !clave) { mostrarMensaje('Ingrese usuario y contraseña', 'error'); return; }
+// --- DASHBOARD ---
+async function renderDashboard() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando dashboard...</div>';
   try {
-    const res = await api('POST', '/api/auth/login', { usuario, clave });
-    if (res && res.usuario) {
-      session = res.usuario;
-      sessionStorage.setItem('avicola_session', JSON.stringify(session));
-      await cargarGalpones();
-      poblarSelectores();
-      mostrarAplicacion();
-    } else {
-      mostrarMensaje('Credenciales inválidas', 'error');
+    const data = await api('/reportes/dashboard');
+    const alertas = await api('/alertas');
+    vaciar(c);
+
+    // Alertas
+    if (alertas.length) {
+      const alertsDiv = crearEl('div', { style: { marginBottom: '16px' } });
+      alertas.forEach(a => {
+        const tipo = a.tipo === 'critico' ? 'alert-critical' : a.tipo === 'advertencia' ? 'alert-warning' : 'alert-info';
+        alertsDiv.appendChild(crearEl('div', { className: `alert-card ${tipo}` }, [
+          crearEl('span', { className: 'alert-icon' }, [a.icono || '📌']),
+          crearEl('span', {}, [a.mensaje]),
+        ]));
+      });
+      c.appendChild(alertsDiv);
     }
-  } catch {}
-};
 
-// Sobreescribir cerrarSesion
-const _originalLogout = cerrarSesion;
-cerrarSesion = function() {
-  session = null;
-  galponesCache = [];
-  sessionStorage.removeItem('avicola_session');
-  const login = $('login-screen');
-  const app = $('app');
-  if (login) login.classList.remove('hidden');
-  if (app) app.classList.add('hidden');
-};
+    // Stats
+    const stats = [
+      { icon: '🐔', label: 'Gallinas Vivas', value: (data.gallinas_vivas || 0).toLocaleString(), bg: 'bg-blue' },
+      { icon: '🥚', label: 'Producción Hoy', value: num(data.produccion_hoy) + ' jabas', bg: 'bg-green' },
+      { icon: '📦', label: 'Stock Huevos', value: num(data.stock_huevos) + ' jabas', bg: 'bg-orange' },
+      { icon: '🌾', label: 'Stock Alimento', value: num(data.stock_alimento) + ' kg', bg: 'bg-blue' },
+      { icon: '💰', label: 'Ventas Hoy', value: num(data.ventas_hoy) + ' jabas', bg: 'bg-green' },
+      { icon: '💀', label: 'Mortalidad Hoy', value: (data.mortalidad_hoy || 0) + ' aves', bg: 'bg-red' },
+    ];
+    const grid = crearEl('div', { className: 'stats-grid' });
+    stats.forEach(s => {
+      grid.appendChild(crearEl('div', { className: 'stat-card' }, [
+        crearEl('div', { className: `stat-icon ${s.bg}` }, [s.icon]),
+        crearEl('div', { className: 'stat-info' }, [
+          crearEl('div', { className: 'stat-label' }, [s.label]),
+          crearEl('div', { className: 'stat-value' }, [s.value]),
+        ]),
+      ]));
+    });
+    c.appendChild(grid);
 
-// ==================== ACCESIBILIDAD ====================
-function cambiarTamanoTexto(valor) {
-  const html = document.documentElement;
-  const actual = parseFloat(window.getComputedStyle(html).fontSize || '16');
-  const nuevo = Math.min(22, Math.max(14, actual + valor));
-  html.style.fontSize = nuevo + 'px';
-  try { localStorage.setItem('tamanoTextoAvicola', nuevo); } catch {}
+    // Charts row
+    const chartsDiv = crearEl('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' } });
+    chartsDiv.appendChild(crearChartCard('Producción Semanal', data.produccion_semanal, 'jabas', '#1a73e8'));
+    chartsDiv.appendChild(crearChartCard('Ventas Mensuales', data.ventas_mensual, 'jabas', '#34a853'));
+    chartsDiv.appendChild(crearChartCard('Consumo Alimento', data.consumo_alimento, 'kg', '#fbbc04'));
+    c.appendChild(chartsDiv);
+
+  } catch { c.innerHTML = '<div class="card">Error al cargar dashboard</div>'; }
 }
 
-function cargarTamanoTexto() {
+function crearChartCard(titulo, datos, label, color) {
+  const max = Math.max(...(datos?.map(d => parseFloat(d.jabas || d.kg || 0)) || [1]), 1);
+  const card = crearEl('div', { className: 'card' }, [
+    crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, [titulo])]),
+  ]);
+  if (!datos?.length) { card.appendChild(crearEl('p', { style: { color: 'var(--text2)', fontSize: '12px' } }, ['Sin datos'])); return card; }
+  const barsWrap = crearEl('div', { className: 'chart-bars' });
+  datos.forEach(d => {
+    const val = parseFloat(d.jabas || d.kg || 0);
+    const pct = Math.max((val / max) * 100, 2);
+    const wrap = crearEl('div', { className: 'chart-bar-wrap' }, [
+      crearEl('div', { className: 'chart-bar', style: { height: pct + '%', backgroundColor: color } }, [
+        val > 0 ? crearEl('div', { className: 'chart-val' }, [num(val)]) : null,
+      ]),
+      crearEl('div', { className: 'chart-label' }, [d.fecha ? formatearFecha(d.fecha)?.slice(0,5) : '']),
+    ]);
+    barsWrap.appendChild(wrap);
+  });
+  card.appendChild(barsWrap);
+  card.appendChild(crearEl('div', { style: { textAlign: 'right', fontSize: '11px', color: 'var(--text3)' } }, [label]));
+  return card;
+}
+
+// --- GALPONES ---
+async function renderGalpones() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
   try {
-    const guardado = localStorage.getItem('tamanoTextoAvicola');
-    if (guardado) document.documentElement.style.fontSize = guardado + 'px';
+    const galpones = await api('/galpones');
+    vaciar(c);
+
+    const header = crearEl('div', { className: 'card-header' }, [
+      crearEl('h3', {}, ['Galpones']),
+      crearEl('div', { className: 'actions' }, [
+        crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => modalGalpon(null) }, ['+ Nuevo']),
+      ]),
+    ]);
+    c.appendChild(crearEl('div', { className: 'card' }, [header]));
+
+    const grid = crearEl('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' } });
+    for (const g of galpones) {
+      const diasAlimento = g.consumo_diario > 0 ? Math.floor((g.alimento_kg || 0) / g.consumo_diario) : 99;
+      const card = crearEl('div', { className: 'card', style: { cursor: 'pointer' }, onClick: () => modalGalponDetalle(g) }, [
+        crearEl('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' } }, [
+          crearEl('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
+            crearEl('span', { style: { fontSize: '20px' } }, ['🐔']),
+            crearEl('h4', { style: { fontSize: '15px', fontWeight: 600 } }, [g.nombre]),
+          ]),
+          crearEl('span', { className: g.estado === 'Activo' ? 'chip chip-green' : 'chip chip-orange' }, [g.estado || 'Activo']),
+        ]),
+        crearEl('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text2)' } }, [
+          crearEl('div', {}, [`🟢 ${(g.gallinas || 0).toLocaleString()} gallinas`]),
+          crearEl('div', {}, [`📅 ${g.edad_lote || 0} días`]),
+          crearEl('div', {}, [`🥚 Prod: ${num(g.produccion_promedio)} jabas/día`]),
+          crearEl('div', {}, [`🌾 Alim: ${num(g.alimento_kg)} kg`]),
+          crearEl('div', {}, [`⏱ ${diasAlimento >= 30 ? '✅+' : diasAlimento >= 7 ? '✅' : diasAlimento >= 3 ? '⚠️' : '🔴'} ${diasAlimento} días`]),
+        ]),
+      ]);
+      grid.appendChild(card);
+    }
+    c.appendChild(grid);
+  } catch { c.innerHTML = '<div class="card">Error al cargar galpones</div>'; }
+}
+
+function modalGalpon(g) {
+  abrirModal('Galpón', [g ? 'Guardar' : 'Crear'], (data) => {
+    if (g) return api('/galpones/' + g.id, { method: 'PUT', body: data });
+    return api('/galpones', { method: 'POST', body: data });
+  }, [
+    { label: 'Nombre', type: 'text', value: g?.nombre || '', required: true },
+    { label: 'Capacidad', type: 'number', value: g?.capacidad || 0 },
+    { label: 'Gallinas', type: 'number', value: g?.gallinas || 0 },
+    { label: 'Edad Lote (días)', type: 'number', value: g?.edad_lote || 0 },
+    { label: 'Consumo Diario (kg)', type: 'number', value: g?.consumo_diario || 0, step: '0.1' },
+    { label: 'Fecha Ingreso', type: 'date', value: g?.fecha_ingreso || '' },
+  ], renderGalpones);
+}
+
+async function modalGalponDetalle(g) {
+  let data;
+  try { data = await api('/galpones/' + g.id); } catch { data = g; }
+  abrirModal(`📋 ${data.nombre}`, ['Cerrar', 'Editar'], (action) => {
+    if (action === 'Editar') { modalGalpon(data); return Promise.resolve(); }
+    return Promise.resolve();
+  }, [
+    { label: 'Estado', type: 'static', value: data.estado || 'Activo' },
+    { label: 'Gallinas Vivas', type: 'static', value: (data.gallinas || 0).toLocaleString() },
+    { label: 'Capacidad', type: 'static', value: (data.capacidad || 0).toLocaleString() },
+    { label: 'Edad Lote', type: 'static', value: `${data.edad_lote || 0} días` },
+    { label: 'Fecha Ingreso', type: 'static', value: formatearFecha(data.fecha_ingreso) },
+    { label: 'Alimento (kg)', type: 'static', value: num(data.alimento_kg) },
+    { label: 'Consumo Diario', type: 'static', value: `${num(data.consumo_diario)} kg` },
+    { label: 'Prod. Promedio', type: 'static', value: `${num(data.produccion_promedio)} jabas` },
+  ], null, '480px');
+}
+
+// --- MOLINO ---
+async function renderMolino() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
+  try {
+    const [formulas, producciones, stockAlim] = await Promise.all([
+      api('/formulas'), api('/molino'), api('/molino/stock-alimento'),
+    ]);
+    vaciar(c);
+
+    // Fabricar form
+    const formCard = crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Fabricar Alimento'])]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [
+          crearEl('label', {}, ['Fecha']),
+          crearEl('input', { id: 'molinoFecha', type: 'date', value: hoy() }),
+        ]),
+        crearEl('div', { className: 'form-group' }, [
+          crearEl('label', {}, ['Fórmula']),
+          crearEl('select', { id: 'molinoFormula' }, [
+            crearEl('option', { value: '' }, ['Seleccione...']),
+            ...formulas.map(f => crearEl('option', { value: f.id }, [f.nombre])),
+          ]),
+        ]),
+        crearEl('div', { className: 'form-group' }, [
+          crearEl('label', {}, ['Tandas']),
+          crearEl('input', { id: 'molinoTandas', type: 'number', value: '1', min: '0.1', step: '0.1' }),
+        ]),
+      ]),
+      crearEl('div', { style: { marginTop: '12px' } }, [
+        crearEl('button', { className: 'btn btn-green', onClick: fabricarAlimento }, ['🌾 Fabricar']),
+      ]),
+    ]);
+    c.appendChild(formCard);
+
+    // Stock Alimento
+    if (stockAlim.length) {
+      const stockCard = crearEl('div', { className: 'card' }, [
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Stock Alimento en Galpones'])]),
+        crearEl('div', { className: 'table-wrap' }, [
+          crearEl('table', {}, [
+            crearEl('thead', {}, [crearEl('tr', {}, ['Galpón','Stock (kg)','Consumo/día','Días restantes','Barra'].map(h => crearEl('th', {}, [h])))]),
+            crearEl('tbody', {}, stockAlim.map(g => {
+              const dias = g.consumo_diario > 0 ? Math.floor((g.kg || 0) / g.consumo_diario) : 99;
+              const maxRef = Math.max(...stockAlim.map(s => s.kg || 0), 1);
+              const pct = Math.min(((g.kg || 0) / maxRef) * 100, 100);
+              return crearEl('tr', {}, [
+                crearEl('td', {}, [g.nombre]),
+                crearEl('td', {}, [num(g.kg)]),
+                crearEl('td', {}, [num(g.consumo_diario)]),
+                crearEl('td', {}, [crearEl('span', { className: dias >= 7 ? 'chip chip-green' : dias >= 3 ? 'chip chip-orange' : 'chip chip-red' }, [dias + ' días'])]),
+                crearEl('td', {}, [
+                  crearEl('div', { className: 'kg-bar-wrap' }, [
+                    crearEl('div', { className: 'kg-bar-bg' }, [crearEl('div', { className: 'kg-bar-fill', style: { width: pct + '%', backgroundColor: dias >= 7 ? 'var(--green)' : dias >= 3 ? 'var(--orange)' : 'var(--red)' } })]),
+                  ]),
+                ]),
+              ]);
+            })),
+          ]),
+        ]),
+      ]);
+      c.appendChild(stockCard);
+    }
+
+    // Historial
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Producción'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Fórmula','Tandas','Kg Producidos','Costo'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, producciones.length ? producciones.map(p => crearEl('tr', {}, [
+            crearEl('td', {}, [formatearFecha(p.fecha)]),
+            crearEl('td', {}, [p.formula_nombre || '-']),
+            crearEl('td', {}, [num(p.tandas)]),
+            crearEl('td', {}, [num(p.kg_producidos)]),
+            crearEl('td', {}, ['S/ ' + num(p.costo)]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+        ]),
+      ]),
+    ]));
+  } catch { c.innerHTML = '<div class="card">Error al cargar molino</div>'; }
+}
+
+async function fabricarAlimento() {
+  const fecha = $('molinoFecha')?.value || hoy();
+  const formula_id = parseInt($('molinoFormula')?.value);
+  const tandas = parseFloat($('molinoTandas')?.value);
+  if (!formula_id) return mostrarMensaje('Seleccione una fórmula', 'warning');
+  if (!tandas || tandas <= 0) return mostrarMensaje('Ingrese cantidad de tandas', 'warning');
+  try {
+    await api('/molino/producir', { method: 'POST', body: { fecha, formula_id, tandas } });
+    mostrarMensaje('Alimento fabricado exitosamente', 'success');
+    renderMolino();
+  } catch { }
+}
+
+// --- ALMACEN HUEVOS ---
+async function renderAlmacenHuevos() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
+  try {
+    const data = await api('/almacen/huevos');
+    vaciar(c);
+
+    // Stock actual
+    const stock = data.stock || {};
+    const huevosPorClase = {};
+    (data.lotes || []).forEach(l => {
+      if (l.cantidad_disponible > 0) huevosPorClase[l.clase] = (huevosPorClase[l.clase] || 0) + l.cantidad_disponible;
+    });
+
+    const statsGrid = crearEl('div', { className: 'stats-grid' });
+    Object.entries(huevosPorClase).forEach(([clase, cant]) => {
+      statsGrid.appendChild(crearEl('div', { className: 'stat-card' }, [
+        crearEl('div', { className: 'stat-icon bg-blue' }, ['🥚']),
+        crearEl('div', { className: 'stat-info' }, [
+          crearEl('div', { className: 'stat-label' }, [clase]),
+          crearEl('div', { className: 'stat-value' }, [num(cant)]),
+        ]),
+      ]));
+    });
+    c.appendChild(statsGrid);
+
+    // Clasificación
+    const clasifCard = crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Clasificar Segunda'])]),
+      crearEl('div', { style: { marginBottom: '12px' } }, [
+        crearEl('span', { className: 'chip chip-orange' }, [`Disponible: ${num(huevosPorClase['Segunda'] || 0)} jabas`]),
+      ]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'clasifFecha', type: 'date', value: hoy() })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Pardo']), crearEl('input', { id: 'clasifPardo', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jumbo']), crearEl('input', { id: 'clasifJumbo', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Sucio']), crearEl('input', { id: 'clasifSucio', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Limpieza']), crearEl('input', { id: 'clasifLimpieza', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Quiñados']), crearEl('input', { id: 'clasifQuinados', type: 'number', value: '0', min: '0', step: '0.5' })]),
+      ]),
+      crearEl('div', { style: { marginTop: '12px' } }, [
+        crearEl('button', { className: 'btn btn-primary', onClick: clasificarSegunda }, ['Clasificar']),
+      ]),
+    ]);
+    if ((huevosPorClase['Segunda'] || 0) > 0) c.appendChild(clasifCard);
+
+    // Producción
+    const prod = await api('/produccion');
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Registrar Producción'])]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'prodFecha', type: 'date', value: hoy() })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Galpón']), crearEl('select', { id: 'prodGalpon' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Primera']), crearEl('input', { id: 'prodPrimera', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jabas Segunda']), crearEl('input', { id: 'prodSegunda', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Gallinas Muertas']), crearEl('input', { id: 'prodMuertas', type: 'number', value: '0', min: '0' })]),
+      ]),
+      crearEl('div', { style: { marginTop: '12px' } }, [
+        crearEl('button', { className: 'btn btn-green', onClick: registrarProduccion }, ['🥚 Registrar']),
+      ]),
+    ]));
+
+    // Cargar galpones
+    try {
+      const galpones = await api('/galpones');
+      const sel = $('prodGalpon');
+      if (sel) {
+        sel.innerHTML = '<option value="">Seleccione...</option>' + galpones.map(g => `<option value="${g.id}">${g.nombre}</option>`).join('');
+      }
+    } catch {}
+
+    // Movimientos recientes
+    const movs = await api('/almacen/movimientos');
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Movimientos Recientes'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Tipo','Detalle','Primera','Segunda'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, movs.slice(0,30).map(m => crearEl('tr', {}, [
+            crearEl('td', {}, [formatearFecha(m.fecha)]),
+            crearEl('td', {}, [crearEl('span', { className: m.tipo === 'Ingreso' ? 'chip chip-green' : m.tipo === 'Venta' ? 'chip chip-red' : 'chip chip-orange' }, [m.tipo])]),
+            crearEl('td', {}, [m.detalle || '-']),
+            crearEl('td', {}, [num(m.primera)]),
+            crearEl('td', {}, [num(m.segunda)]),
+          ]))),
+        ]),
+      ]),
+    ]));
+  } catch { c.innerHTML = '<div class="card">Error al cargar almacén</div>'; }
+}
+
+async function registrarProduccion() {
+  const fecha = $('prodFecha')?.value || hoy();
+  const galpon_id = parseInt($('prodGalpon')?.value);
+  const primera = parseFloat($('prodPrimera')?.value) || 0;
+  const segunda = parseFloat($('prodSegunda')?.value) || 0;
+  const muertas = parseInt($('prodMuertas')?.value) || 0;
+  if (!galpon_id) return mostrarMensaje('Seleccione un galpón', 'warning');
+  if (primera <= 0 && segunda <= 0) return mostrarMensaje('Ingrese al menos 1 jaba', 'warning');
+  try {
+    await api('/produccion', { method: 'POST', body: { fecha, galpon_id, primera, segunda, muertas } });
+    mostrarMensaje('Producción registrada', 'success');
+    renderAlmacenHuevos();
   } catch {}
 }
 
-function resetTamanoTexto() {
-  document.documentElement.style.fontSize = '16px';
-  try { localStorage.setItem('tamanoTextoAvicola', '16'); } catch {}
+async function clasificarSegunda() {
+  const fecha = $('clasifFecha')?.value || hoy();
+  const pardo = parseFloat($('clasifPardo')?.value) || 0;
+  const jumbo = parseFloat($('clasifJumbo')?.value) || 0;
+  const sucio = parseFloat($('clasifSucio')?.value) || 0;
+  const limpieza = parseFloat($('clasifLimpieza')?.value) || 0;
+  const quinados = parseFloat($('clasifQuinados')?.value) || 0;
+  const total = pardo + jumbo + sucio + limpieza + quinados;
+  if (total <= 0) return mostrarMensaje('Ingrese al menos 1 jaba clasificada', 'warning');
+  try {
+    await api('/almacen/clasificar', { method: 'PUT', body: { fecha, pardo, jumbo, sucio, limpieza, quinados } });
+    mostrarMensaje('Clasificación guardada', 'success');
+    renderAlmacenHuevos();
+  } catch {}
+}
+
+// --- ALMACEN INSUMOS ---
+async function renderAlmacenInsumos() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
+  try {
+    const insumos = await api('/insumos');
+    vaciar(c);
+    c.appendChild(crearEl('div', { className: 'card-header' }, [
+      crearEl('h3', {}, ['Inventario de Insumos']),
+    ]));
+    const maxRef = Math.max(...insumos.map(i => i.cantidad_kg || 0), 1);
+    c.appendChild(crearEl('div', { className: 'table-wrap' }, [
+      crearEl('table', {}, [
+        crearEl('thead', {}, [crearEl('tr', {}, ['Producto','Stock','Unidad','Stock Mínimo','Barra','Última Compra','Última Salida'].map(h => crearEl('th', {}, [h])))]),
+        crearEl('tbody', {}, insumos.map(i => {
+          const pct = Math.min(((i.cantidad_kg || 0) / maxRef) * 100, 100);
+          const critico = (i.cantidad_kg || 0) < (i.stock_minimo_kg || 0);
+          return crearEl('tr', {}, [
+            crearEl('td', { style: { fontWeight: 500 } }, [i.nombre]),
+            crearEl('td', {}, [crearEl('span', { className: critico ? 'chip chip-red' : '' }, [num(i.cantidad_kg)])]),
+            crearEl('td', {}, [i.etiqueta || 'Kg']),
+            crearEl('td', {}, [num(i.stock_minimo_kg)]),
+            crearEl('td', {}, [
+              crearEl('div', { className: 'kg-bar-wrap' }, [
+                crearEl('div', { className: 'kg-bar-bg' }, [crearEl('div', { className: 'kg-bar-fill', style: { width: pct + '%', backgroundColor: critico ? 'var(--red)' : pct < 30 ? 'var(--orange)' : 'var(--green)' } })]),
+              ]),
+            ]),
+            crearEl('td', {}, [formatearFecha(i.ultima_compra)]),
+            crearEl('td', {}, [formatearFecha(i.ultima_salida)]),
+          ]);
+        })),
+      ]),
+    ]));
+  } catch { c.innerHTML = '<div class="card">Error al cargar insumos</div>'; }
+}
+
+// --- COMPRAS ---
+async function renderCompras() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
+  try {
+    const [compras, proveedores, insumos] = await Promise.all([
+      api('/compras'), api('/proveedores'), api('/insumos'),
+    ]);
+    vaciar(c);
+
+    // Nueva compra
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Nueva Compra'])]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'compraFecha', type: 'date', value: hoy() })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Proveedor']), crearEl('select', { id: 'compraProveedor' }, [
+          crearEl('option', { value: '' }, ['Seleccione...']),
+          ...proveedores.map(p => crearEl('option', { value: p.id, label: p.nombre }, [p.nombre])),
+        ])]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Insumo']), crearEl('select', { id: 'compraInsumo' }, [
+          crearEl('option', { value: '' }, ['Seleccione...']),
+          ...insumos.map(i => crearEl('option', { value: i.id, label: i.nombre }, [i.nombre])),
+        ])]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Cantidad']), crearEl('input', { id: 'compraCantidad', type: 'number', value: '1', min: '0.01', step: '0.01' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio Unit.']), crearEl('input', { id: 'compraPrecio', type: 'number', value: '0', min: '0', step: '0.01' })]),
+      ]),
+      crearEl('div', { style: { marginTop: '12px' } }, [
+        crearEl('button', { className: 'btn btn-green', onClick: registrarCompra }, ['🛒 Registrar Compra']),
+      ]),
+    ]));
+
+    // Historial
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Compras'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Proveedor','Insumo','Cantidad','P.Unit.','Total'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, compras.length ? compras.map(cp => crearEl('tr', {}, [
+            crearEl('td', {}, [formatearFecha(cp.fecha)]),
+            crearEl('td', {}, [cp.proveedor_nombre || '-']),
+            crearEl('td', {}, [cp.insumo_nombre || '-']),
+            crearEl('td', {}, [num(cp.cantidad)]),
+            crearEl('td', {}, ['S/ ' + num(cp.precio_unitario)]),
+            crearEl('td', {}, ['S/ ' + num(cp.total)]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '6', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+        ]),
+      ]),
+    ]));
+  } catch { c.innerHTML = '<div class="card">Error al cargar compras</div>'; }
+}
+
+async function registrarCompra() {
+  const fecha = $('compraFecha')?.value || hoy();
+  const proveedor_id = parseInt($('compraProveedor')?.value);
+  const insumo_id = parseInt($('compraInsumo')?.value);
+  const cantidad = parseFloat($('compraCantidad')?.value);
+  const precio_unitario = parseFloat($('compraPrecio')?.value) || 0;
+  if (!proveedor_id || !insumo_id) return mostrarMensaje('Complete todos los campos', 'warning');
+  if (!cantidad || cantidad <= 0) return mostrarMensaje('Ingrese cantidad válida', 'warning');
+  const proveedor = $('compraProveedor')?.selectedOptions[0]?.text || '';
+  const insumo = $('compraInsumo')?.selectedOptions[0]?.text || '';
+  try {
+    await api('/compras', { method: 'POST', body: { fecha, proveedor_id, proveedor_nombre: proveedor, insumo_id, insumo_nombre: insumo, cantidad, precio_unitario } });
+    mostrarMensaje('Compra registrada', 'success');
+    renderCompras();
+  } catch {}
+}
+
+// --- VENTAS ---
+async function renderVentas() {
+  const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
+  try {
+    const [ventas, clientes] = await Promise.all([
+      api('/ventas'), api('/clientes'),
+    ]);
+    vaciar(c);
+
+    // Precios base
+    const precios = { primera: 4.50, segunda: 3.50, pardo: 5.00, jumbo: 6.00, sucio: 2.50, limpieza: 3.00, quinados: 1.50 };
+
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Nueva Venta'])]),
+      crearEl('div', { className: 'form-grid' }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'ventaFecha', type: 'date', value: hoy() })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Cliente']), crearEl('select', { id: 'ventaCliente' }, [
+          crearEl('option', { value: '' }, ['Seleccione...']),
+          ...clientes.map(c => crearEl('option', { value: c.id, label: c.nombre }, [c.nombre])),
+        ])]),
+      ]),
+      crearEl('div', { className: 'form-grid', style: { marginTop: '8px' } }, [
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Primera (S/ ' + precios.primera.toFixed(2) + ')']), crearEl('input', { id: 'ventaPrimera', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Segunda (S/ ' + precios.segunda.toFixed(2) + ')']), crearEl('input', { id: 'ventaSegunda', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Pardo (S/ ' + precios.pardo.toFixed(2) + ')']), crearEl('input', { id: 'ventaPardo', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jumbo (S/ ' + precios.jumbo.toFixed(2) + ')']), crearEl('input', { id: 'ventaJumbo', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Sucio (S/ ' + precios.sucio.toFixed(2) + ')']), crearEl('input', { id: 'ventaSucio', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Limpieza (S/ ' + precios.limpieza.toFixed(2) + ')']), crearEl('input', { id: 'ventaLimpieza', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Quiñados (S/ ' + precios.quinados.toFixed(2) + ')']), crearEl('input', { id: 'ventaQuinados', type: 'number', value: '0', min: '0', step: '0.5', onInput: calcVenta })]),
+      ]),
+      crearEl('div', { id: 'ventaResumen', style: { marginTop: '12px', padding: '12px', background: 'var(--primary-light)', borderRadius: '8px', display: 'flex', gap: '24px', fontSize: '14px' } }, [
+        crearEl('span', {}, ['Total Jabas: <strong id="ventaTotalJabas">0.00</strong>']),
+        crearEl('span', {}, ['Peso: <strong id="ventaPeso">0.00</strong> kg']),
+        crearEl('span', {}, ['Importe: S/ <strong id="ventaImporte">0.00</strong>']),
+      ]),
+      crearEl('div', { style: { marginTop: '12px' } }, [
+        crearEl('button', { className: 'btn btn-green', onClick: registrarVenta }, ['💰 Registrar Venta']),
+      ]),
+    ]));
+
+    // Historial
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Ventas'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Cliente','Jabas','Peso (kg)','Total'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, ventas.length ? ventas.map(v => crearEl('tr', {}, [
+            crearEl('td', {}, [formatearFecha(v.fecha)]),
+            crearEl('td', {}, [v.cliente_nombre || '-']),
+            crearEl('td', {}, [num(v.total_jabas)]),
+            crearEl('td', {}, [num(v.peso)]),
+            crearEl('td', {}, ['S/ ' + num(v.total)]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+        ]),
+      ]),
+    ]));
+  } catch { c.innerHTML = '<div class="card">Error al cargar ventas</div>'; }
+}
+
+function calcVenta() {
+  const precios = { primera: 4.50, segunda: 3.50, pardo: 5.00, jumbo: 6.00, sucio: 2.50, limpieza: 3.00, quinados: 1.50 };
+  const campos = ['primera','segunda','pardo','jumbo','sucio','limpieza','quinados'];
+  let totalJabas = 0, totalImporte = 0;
+  campos.forEach(c => {
+    const v = parseFloat($('venta'+c.charAt(0).toUpperCase()+c.slice(1))?.value) || 0;
+    totalJabas += v;
+    totalImporte += v * (precios[c] || 0);
+  });
+  const peso = totalJabas * 18;
+  $('ventaTotalJabas').innerHTML = num(totalJabas);
+  $('ventaPeso').innerHTML = num(peso);
+  $('ventaImporte').innerHTML = num(totalImporte);
+}
+
+async function registrarVenta() {
+  const fecha = $('ventaFecha')?.value || hoy();
+  const cliente_id = parseInt($('ventaCliente')?.value);
+  if (!cliente_id) return mostrarMensaje('Seleccione un cliente', 'warning');
+  const campos = ['primera','segunda','pardo','jumbo','sucio','limpieza','quinados'];
+  const body = { fecha, cliente_id, cliente_nombre: $('ventaCliente')?.selectedOptions[0]?.text || '' };
+  campos.forEach(c => {
+    body[c] = parseFloat($('venta'+c.charAt(0).toUpperCase()+c.slice(1))?.value) || 0;
+  });
+  const totalJabas = campos.reduce((s, c) => s + (parseFloat(body[c]) || 0), 0);
+  if (totalJabas <= 0) return mostrarMensaje('Debe vender al menos 1 jaba', 'warning');
+  try {
+    await api('/ventas', { method: 'POST', body });
+    mostrarMensaje('Venta registrada', 'success');
+    renderVentas();
+  } catch {}
+}
+
+// --- REPORTES ---
+let reportesTab = 'produccion';
+
+async function renderReportes() {
+  const c = $('content'); vaciar(c);
+  c.appendChild(crearEl('div', { className: 'tabs', id: 'reportesTabs' }, [
+    'produccion','ventas','inventario','molino','galpones','mortalidad'
+  ].map(t => crearEl('div', { className: `tab ${t === reportesTab ? 'active' : ''}`, dataset: { reporte: t }, onClick: () => { reportesTab = t; renderReportes(); } }, [t.charAt(0).toUpperCase() + t.slice(1)]))));
+
+  const filterDiv = crearEl('div', { className: 'filter-row' }, [
+    crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Desde']), crearEl('input', { id: 'repDesde', type: 'date', value: diasAtras(30) })]),
+    crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Hasta']), crearEl('input', { id: 'repHasta', type: 'date', value: hoy() })]),
+    crearEl('button', { className: 'btn btn-outline btn-sm', onClick: renderReporteData }, ['Filtrar']),
+  ]);
+  c.appendChild(filterDiv);
+
+  const dataDiv = crearEl('div', { id: 'reporteData' });
+  c.appendChild(dataDiv);
+  renderReporteData();
+}
+
+async function renderReporteData() {
+  const div = $('reporteData'); if (!div) return;
+  div.innerHTML = '<div class="card">Cargando...</div>';
+  const desde = $('repDesde')?.value || diasAtras(30);
+  const hasta = $('repHasta')?.value || hoy();
+  try {
+    const data = await api(`/reportes/${reportesTab}?desde=${desde}&hasta=${hasta}`);
+    vaciar(div);
+
+    if (reportesTab === 'produccion') {
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Galpón','Primera','Segunda','Total','Muertas'], data.map(p => [formatearFecha(p.fecha), p.galpon_nombre||'-', num(p.primera), num(p.segunda), num((p.primera||0)+(p.segunda||0)), p.muertas||0]))]));
+    } else if (reportesTab === 'ventas') {
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Cliente','Jabas','Peso','Total'], data.map(v => [formatearFecha(v.fecha), v.cliente_nombre||'-', num(v.total_jabas), num(v.peso), 'S/ '+num(v.total)]))]));
+    } else if (reportesTab === 'inventario') {
+      const huevos = data.huevos || [];
+      div.appendChild(crearEl('h4', { style: { fontSize: '13px', marginBottom: '8px' } }, ['Stock Huevos']));
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Clase','Jabas'], huevos.map(h => [h.clase, num(h.stock)]))]));
+      div.appendChild(crearEl('h4', { style: { fontSize: '13px', margin: '16px 0 8px' } }, ['Stock Insumos']));
+      div.appendChild(crearEl('div', { className: 'table-wrap', style: { marginTop: '8px' } }, [crearTabla(['Producto','Stock (kg)','Stock Mínimo'], data.insumos?.map(i => [i.nombre, num(i.cantidad_kg), num(i.stock_minimo_kg)]) || [])]));
+    } else if (reportesTab === 'molino') {
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Fórmula','Tandas','Kg','Costo'], data.map(m => [formatearFecha(m.fecha), m.formula_nombre||'-', num(m.tandas), num(m.kg_producidos), 'S/ '+num(m.costo)]))]));
+    } else if (reportesTab === 'galpones') {
+      for (const g of data) {
+        const card = crearEl('div', { className: 'card' }, [
+          crearEl('h4', { style: { fontSize: '14px', marginBottom: '8px' } }, [`${g.nombre} — ${(g.gallinas||0).toLocaleString()} gallinas, Mortalidad: ${g.mortalidad||0}`]),
+          crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Primera','Segunda','Muertas'], (g.produccion||[]).map(p => [formatearFecha(p.fecha), num(p.primera), num(p.segunda), p.muertas||0]))]),
+        ]);
+        div.appendChild(card);
+      }
+    } else if (reportesTab === 'mortalidad') {
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Galpón','Muertas'], data.map(m => [formatearFecha(m.fecha), m.galpon_nombre||'-', m.muertas||0]))]));
+    }
+  } catch { div.innerHTML = '<div class="card">Error al cargar reporte</div>'; }
+}
+
+function crearTabla(headers, rows) {
+  return crearEl('table', {}, [
+    crearEl('thead', {}, [crearEl('tr', {}, headers.map(h => crearEl('th', {}, [h])))]),
+    crearEl('tbody', {}, rows.length ? rows.map(r => crearEl('tr', {}, r.map(c => crearEl('td', {}, [c != null ? String(c) : '-'])))) : [crearEl('tr', {}, [crearEl('td', { colspan: String(headers.length), style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin datos'])])]),
+  ]);
+}
+
+// --- CONFIGURACION ---
+let configTab = 'usuarios';
+
+async function renderConfiguracion() {
+  const c = $('content'); vaciar(c);
+  c.appendChild(crearEl('div', { className: 'tabs', id: 'configTabs' }, [
+    ['usuarios','Usuarios'],['empresa','Empresa'],['parametros','Parámetros']
+  ].map(([k, v]) => crearEl('div', { className: `tab ${k === configTab ? 'active' : ''}`, onClick: () => { configTab = k; renderConfiguracion(); } }, [v]))));
+  if (configTab === 'usuarios') {
+    try {
+      const usuarios = await api('/configuracion/usuarios');
+      c.appendChild(crearEl('div', { className: 'card' }, [
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Usuarios']), crearEl('div', { className: 'actions' }, [crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => modalUsuario(null) }, ['+ Nuevo'])])]),
+        crearEl('div', { className: 'table-wrap' }, [crearTabla(['Usuario','Rol','Empleado','Activo'], usuarios.map(u => [u.usuario, u.rol, u.empleado_nombre||'-', u.activo ? '✅' : '❌']))]),
+      ]));
+    } catch {}
+  } else if (configTab === 'empresa') {
+    try {
+      const emp = await api('/configuracion/empresa');
+      c.appendChild(crearEl('div', { className: 'card' }, [
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Datos de la Empresa'])]),
+        crearEl('div', { className: 'form-grid' }, [
+          crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Nombre']), crearEl('input', { id: 'empNombre', value: emp?.nombre || '' })]),
+          crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['RUC']), crearEl('input', { id: 'empRuc', value: emp?.ruc || '' })]),
+          crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Dirección']), crearEl('input', { id: 'empDireccion', value: emp?.direccion || '' })]),
+          crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Teléfono']), crearEl('input', { id: 'empTelefono', value: emp?.telefono || '' })]),
+        ]),
+        crearEl('button', { className: 'btn btn-primary', style: { marginTop: '12px' }, onClick: guardarEmpresa }, ['Guardar']),
+      ]));
+    } catch {}
+  } else if (configTab === 'parametros') {
+    try {
+      const params = await api('/configuracion/parametros');
+      c.appendChild(crearEl('div', { className: 'card' }, [
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Parámetros del Sistema'])]),
+        crearEl('div', { className: 'table-wrap' }, [crearTabla(['Clave','Valor','Descripción','Acción'], params.map(p => [p.clave, p.valor, p.descripcion||'', '—']))]),
+      ]));
+    } catch {}
+  }
+}
+
+async function guardarEmpresa() {
+  const body = {
+    nombre: $('empNombre')?.value || '',
+    ruc: $('empRuc')?.value || '',
+    direccion: $('empDireccion')?.value || '',
+    telefono: $('empTelefono')?.value || '',
+  };
+  try {
+    await api('/configuracion/empresa', { method: 'PUT', body });
+    mostrarMensaje('Datos guardados', 'success');
+  } catch {}
+}
+
+function modalUsuario(u) {
+  abrirModal('Usuario', [u ? 'Guardar' : 'Crear'], async (data) => {
+    if (u) return api('/configuracion/usuarios/' + u.id, { method: 'PUT', body: data });
+    return api('/configuracion/usuarios', { method: 'POST', body: data });
+  }, [
+    { label: 'Usuario', type: 'text', value: u?.usuario || '', required: true },
+    { label: 'Contraseña', type: 'password', value: '', required: !u },
+    { label: 'Rol', type: 'select', value: u?.rol || 'Producción', options: ['Administrador','Producción','Almacén','Ventas','Gerencia'] },
+  ], renderConfiguracion);
+}
+
+// --- MODAL UTILITY ---
+function abrirModal(titulo, acciones, onSubmit, campos, onClose, width) {
+  const overlay = crearEl('div', { className: 'modal-overlay', id: 'modalOverlay', onClick: (e) => { if (e.target === overlay) cerrarModal(); } });
+  const modal = crearEl('div', { className: 'modal', style: width ? { maxWidth: width } : {} });
+  const inputs = {};
+
+  modal.appendChild(crearEl('h3', {}, [titulo]));
+
+  const formGrid = crearEl('div', { className: 'form-grid' });
+  for (const c of campos) {
+    const grp = crearEl('div', { className: 'form-group' });
+    grp.appendChild(crearEl('label', {}, [c.label]));
+    if (c.type === 'static') {
+      grp.appendChild(crearEl('div', { style: { padding: '8px 0', fontWeight: 500, color: 'var(--text)' } }, [c.value || '-']));
+    } else if (c.type === 'select') {
+      const sel = crearEl('select', { id: 'modal_' + c.label.replace(/\s+/g, '_') });
+      (c.options || []).forEach(o => sel.appendChild(crearEl('option', { value: o, selected: o === c.value }, [o])));
+      grp.appendChild(sel);
+    } else {
+      const inp = crearEl('input', { type: c.type || 'text', value: c.value ?? '', placeholder: c.label, required: c.required ? '' : undefined, step: c.step, id: 'modal_' + c.label.replace(/\s+/g, '_') });
+      grp.appendChild(inp);
+    }
+    formGrid.appendChild(grp);
+  }
+  modal.appendChild(formGrid);
+
+  const actionsDiv = crearEl('div', { className: 'modal-actions' });
+  if (acciones.includes('Cerrar') || acciones.some(a => a === 'Cerrar')) {
+    actionsDiv.appendChild(crearEl('button', { className: 'btn btn-outline', onClick: cerrarModal }, ['Cerrar']));
+  } else {
+    actionsDiv.appendChild(crearEl('button', { className: 'btn btn-outline', onClick: cerrarModal }, ['Cancelar']));
+  }
+  acciones.forEach(a => {
+    if (a === 'Cerrar' || a === 'Cancelar') return;
+    actionsDiv.appendChild(crearEl('button', { className: 'btn btn-primary', onClick: async () => {
+      const data = {};
+      for (const c of campos) {
+        if (c.type === 'static') { data[c.label.toLowerCase()] = c.value; continue; }
+        const el = $('modal_' + c.label.replace(/\s+/g, '_'));
+        if (el) data[c.label.toLowerCase().replace(/\s+/g, '_')] = el.value;
+      }
+      try {
+        if (typeof onSubmit === 'function') {
+          const result = await onSubmit(data);
+          if (result && result.success === false) return;
+        }
+        cerrarModal();
+        if (typeof onClose === 'function') onClose();
+      } catch { }
+    } }, [a]));
+  });
+  modal.appendChild(actionsDiv);
+
+  overlay.appendChild(modal);
+  $('modalContainer').appendChild(overlay);
+}
+
+function cerrarModal() {
+  $('modalOverlay')?.remove();
 }

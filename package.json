@@ -1,0 +1,29 @@
+{
+  "name": "IHC.AVICOLA",
+  "version": "1.0.0",
+  "description": "ERP para Producción Avícola - Front-end completo con Supabase como backend",
+  "main": "index.html",
+  "scripts": {
+    "dev": "echo \"Esta es una aplicación estática. Usa un servidor para servir los archivos.\" && npx serve . -p 3000",
+    "deploy": "echo \"Listo para desplegar en GitHub Pages, Netlify o Render\""
+  },
+  "author": "IHC A VICOLA",
+  "license": "MIT",
+  "keywords": [
+    "erp",
+    "aviary",
+    "production",
+    "supabase",
+    "web-app",
+    "dashboard",
+    "management"
+  ],
+  "homepage": "https://github.com/anomalyco/opencode",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anomalyco/opencode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anomalyco/opencode/issues"
+  }
+}
