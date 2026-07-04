@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
-const qs = (el, sel) => (el || document).querySelector(sel);
-const qsa = (el, sel) => (el || document).querySelectorAll(sel);
+const qs = (sel, el) => (el || document).querySelector(sel);
+const qsa = (sel, el) => (el || document).querySelectorAll(sel);
 
 // ========== SUPABASE CONFIGURATION ==========
 const SUPABASE_URL = 'https://sjyqskmhywykhzjgqegt.supabase.co';
