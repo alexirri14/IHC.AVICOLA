@@ -323,8 +323,7 @@ END $$;
 -- 4. DATOS INICIALES
 -- ============================================================
 INSERT INTO stock_huevos (clase, cantidad) VALUES
-  ('Primera', 0), ('Segunda', 0), ('Pardo', 0), ('Jumbo', 0),
-  ('Sucio', 0), ('Quiñados', 0)
+  ('Primera', 0), ('Segunda', 0)
 ON CONFLICT (clase) DO NOTHING;
 
 INSERT INTO empresa (nombre, ruc, direccion, telefono) VALUES

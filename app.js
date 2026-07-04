@@ -367,7 +367,8 @@ async function api(path, options = {}) {
           });
         });
         const r=await c.insert('ventas',{...body,total_jabas:tj,peso:tj*pesoJaba,total:ti});
-        for(const k of ['primera','pardo','jumbo','sucio','quinados']){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:k.charAt(0).toUpperCase()+k.slice(1),p_cantidad:v}); }
+        const mapaStock={primera:'Primera',pardo:'Segunda',jumbo:'Segunda',sucio:'Segunda',quinados:'Segunda'};
+        for(const k of Object.keys(mapaStock)){ const v=parseFloat(body[k])||0; if(v>0) await c.rpc('restar_stock',{p_clase:mapaStock[k],p_cantidad:v}); }
         return r;
       }
     }
@@ -379,7 +380,7 @@ async function api(path, options = {}) {
         const table = pathToTable[m[1]];
         if(table) return await c.update(table, body, {'id':'eq.'+m[2]});
       }
-      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ const destino = k === 'limpieza' ? 'Primera' : k.charAt(0).toUpperCase()+k.slice(1); await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:v}); await c.rpc('sumar_stock',{p_clase:destino,p_cantidad:v}); } return {success:true}; }
+      if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); } return {success:true}; }
       if(cleanPath==='/configuracion/empresa') return await c.update('empresa',body,{'id':'eq.1'});
     }
     throw new Error('Ruta no implementada: '+method+' '+cleanPath);
@@ -776,10 +777,11 @@ async function renderAlmacenHuevos() {
     c.appendChild(statsGrid);
 
     // Clasificación
+    const stockSegunda = parseFloat(stock['Segunda'] || 0);
     const clasifCard = crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Clasificar Segunda'])]),
       crearEl('div', { style: { marginBottom: '12px' } }, [
-        crearEl('span', { className: 'chip chip-orange' }, [`Disponible: ${num(huevosPorClase['Segunda'] || 0)} jabas`]),
+        crearEl('span', { className: 'chip chip-orange' }, [`Disponible: ${num(stockSegunda)} jabas`]),
       ]),
       crearEl('div', { className: 'form-grid' }, [
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'clasifFecha', type: 'date', value: hoy() })]),
@@ -793,7 +795,7 @@ async function renderAlmacenHuevos() {
         crearEl('button', { className: 'btn btn-primary', onClick: clasificarSegunda }, ['Clasificar']),
       ]),
     ]);
-    if ((huevosPorClase['Segunda'] || 0) > 0) c.appendChild(clasifCard);
+    if (stockSegunda > 0) c.appendChild(clasifCard);
 
     // Producción
     const prod = await api('/produccion');
