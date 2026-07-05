@@ -3,6 +3,13 @@
 -- Ejecutar en SQL Editor de Supabase Dashboard
 -- ============================================================
 
+-- 0. MIGRACIONES PARA TABLAS EXISTENTES
+-- ============================================================
+ALTER TABLE produccion_molino ADD COLUMN IF NOT EXISTS galpon_id bigint REFERENCES galpones(id);
+ALTER TABLE produccion_molino ADD COLUMN IF NOT EXISTS detalle text;
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS precio_primera numeric(10,2) DEFAULT 0;
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS precio_segunda numeric(10,2) DEFAULT 0;
+
 -- 1. TABLAS BASE
 -- ============================================================
 
@@ -10,15 +17,12 @@
 CREATE TABLE IF NOT EXISTS galpones (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   nombre text NOT NULL,
-  capacidad integer DEFAULT 0,
   gallinas integer DEFAULT 0,
-  edad_lote integer DEFAULT 0,
   consumo_diario numeric(10,2) DEFAULT 0,
   fecha_ingreso date,
   estado text DEFAULT 'Activo',
-  alimento_kg numeric(10,2) DEFAULT 0,
-  produccion_promedio numeric(10,2) DEFAULT 0,
-  created_at timestamptz DEFAULT now()
+  alimento_sacos numeric(10,2) DEFAULT 0,
+  produccion_promedio numeric(10,2) DEFAULT 0
 );
 
 -- Producción diaria de huevos
@@ -45,9 +49,20 @@ CREATE TABLE IF NOT EXISTS produccion_molino (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   fecha date NOT NULL,
   formula_id bigint REFERENCES formulas(id),
+  galpon_id bigint REFERENCES galpones(id),
   tandas numeric(10,2) DEFAULT 0,
   kg_producidos numeric(10,2) DEFAULT 0,
-  costo numeric(10,2) DEFAULT 0,
+  detalle text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Insumos usados en cada producción de molino
+CREATE TABLE IF NOT EXISTS produccion_molino_insumos (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  produccion_id bigint REFERENCES produccion_molino(id) ON DELETE CASCADE,
+  insumo_id bigint REFERENCES insumos(id),
+  insumo_nombre text,
+  cantidad numeric(10,2) DEFAULT 0,
   created_at timestamptz DEFAULT now()
 );
 
@@ -71,17 +86,21 @@ CREATE TABLE IF NOT EXISTS proveedores (
   created_at timestamptz DEFAULT now()
 );
 
--- Compras
-CREATE TABLE IF NOT EXISTS compras (
+-- Ingreso de insumos (reemplaza compras)
+CREATE TABLE IF NOT EXISTS ingreso_insumos (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   fecha date NOT NULL,
-  proveedor_id bigint REFERENCES proveedores(id),
   proveedor_nombre text,
+  detalle text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ingreso_insumos_detalle (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ingreso_id bigint REFERENCES ingreso_insumos(id) ON DELETE CASCADE,
   insumo_id bigint REFERENCES insumos(id),
   insumo_nombre text,
   cantidad numeric(10,2) DEFAULT 0,
-  precio_unitario numeric(10,2) DEFAULT 0,
-  total numeric(10,2) DEFAULT 0,
   created_at timestamptz DEFAULT now()
 );
 
@@ -98,6 +117,8 @@ CREATE TABLE IF NOT EXISTS ventas (
   fecha date NOT NULL,
   cliente_id bigint REFERENCES clientes(id),
   cliente_nombre text,
+  precio_primera numeric(10,2) DEFAULT 0,
+  precio_segunda numeric(10,2) DEFAULT 0,
   primera numeric(10,2) DEFAULT 0,
   segunda numeric(10,2) DEFAULT 0,
   pardo numeric(10,2) DEFAULT 0,
@@ -194,17 +215,15 @@ CREATE TABLE IF NOT EXISTS consumo_alimento (
 CREATE OR REPLACE FUNCTION registrar_consumo(p_fecha date, p_galpon_id bigint, p_sacos numeric)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
-  v_kg numeric;
-  v_kg_diff numeric;
+  v_sacos_diff numeric;
   v_anterior numeric;
 BEGIN
-  v_kg := p_sacos * 50;
   SELECT sacos_50kg INTO v_anterior FROM consumo_alimento WHERE fecha = p_fecha AND galpon_id = p_galpon_id;
   INSERT INTO consumo_alimento (fecha, galpon_id, kg_consumidos, sacos_50kg)
-    VALUES (p_fecha, p_galpon_id, v_kg, p_sacos)
-    ON CONFLICT (fecha, galpon_id) DO UPDATE SET kg_consumidos = v_kg, sacos_50kg = p_sacos;
-  v_kg_diff := v_kg - COALESCE(v_anterior * 50, 0);
-  UPDATE galpones SET alimento_kg = GREATEST(0, alimento_kg - v_kg_diff) WHERE id = p_galpon_id;
+    VALUES (p_fecha, p_galpon_id, p_sacos * 50, p_sacos)
+    ON CONFLICT (fecha, galpon_id) DO UPDATE SET kg_consumidos = p_sacos * 50, sacos_50kg = p_sacos;
+  v_sacos_diff := p_sacos - COALESCE(v_anterior, 0);
+  UPDATE galpones SET alimento_sacos = GREATEST(0, alimento_sacos - v_sacos_diff) WHERE id = p_galpon_id;
 END $$;
 
 -- 2. VISTAS PARA REPORTES
@@ -215,10 +234,10 @@ CREATE OR REPLACE VIEW vista_stock_alimento AS
 SELECT 
   g.id,
   g.nombre,
-  g.alimento_kg AS kg,
+  g.alimento_sacos AS sacos,
   g.consumo_diario,
   CASE WHEN g.consumo_diario > 0 
-    THEN floor(g.alimento_kg / g.consumo_diario) 
+    THEN floor(g.alimento_sacos / g.consumo_diario) 
     ELSE 99 
   END AS dias_restantes
 FROM galpones g
@@ -230,7 +249,7 @@ SELECT
   COALESCE((SELECT SUM(gallinas) FROM galpones), 0) AS gallinas_vivas,
   COALESCE((SELECT SUM(primera + segunda) FROM produccion WHERE fecha = CURRENT_DATE), 0) AS produccion_hoy,
   COALESCE((SELECT SUM(cantidad) FROM stock_huevos), 0) AS stock_huevos,
-  COALESCE((SELECT SUM(alimento_kg) FROM galpones), 0) AS stock_alimento,
+  COALESCE((SELECT SUM(alimento_sacos) FROM galpones), 0) AS stock_alimento,
   COALESCE((SELECT SUM(total_jabas) FROM ventas WHERE fecha = CURRENT_DATE), 0) AS ventas_hoy,
   COALESCE((SELECT SUM(muertas) FROM produccion WHERE fecha = CURRENT_DATE), 0) AS mortalidad_hoy;
 
@@ -257,6 +276,35 @@ FROM produccion_molino
 WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
 GROUP BY fecha
 ORDER BY fecha;
+
+-- Vista: Producción con nombre de galpón
+CREATE OR REPLACE VIEW vista_produccion_galpon AS
+SELECT p.*, g.nombre AS galpon_nombre
+FROM produccion p
+LEFT JOIN galpones g ON g.id = p.galpon_id;
+
+-- Vista: Producción molino con nombre de fórmula y galpón
+CREATE OR REPLACE VIEW vista_produccion_molino_formula AS
+SELECT pm.*, f.nombre AS formula_nombre, g.nombre AS galpon_nombre
+FROM produccion_molino pm
+LEFT JOIN formulas f ON f.id = pm.formula_id
+LEFT JOIN galpones g ON g.id = pm.galpon_id;
+
+-- Vista: Ingreso de insumos con sus detalles
+CREATE OR REPLACE VIEW vista_ingreso_insumos AS
+SELECT ii.*, COALESCE(d.items, '[]'::json) AS items
+FROM ingreso_insumos ii
+LEFT JOIN LATERAL (
+  SELECT json_agg(json_build_object(
+    'id', iid.id,
+    'insumo_id', iid.insumo_id,
+    'insumo_nombre', iid.insumo_nombre,
+    'cantidad', iid.cantidad
+  ) ORDER BY iid.id) AS items
+  FROM ingreso_insumos_detalle iid
+  WHERE iid.ingreso_id = ii.id
+) d ON true
+ORDER BY ii.fecha DESC;
 
 -- 3. RPC (STORED PROCEDURES)
 -- ============================================================
@@ -288,7 +336,7 @@ BEGIN
 END $$;
 
 -- Distribuir alimento producido a los galpones activos
-CREATE OR REPLACE FUNCTION distribuir_alimento(p_kg numeric)
+CREATE OR REPLACE FUNCTION distribuir_alimento(p_sacos numeric)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
   total_activos integer;
@@ -296,8 +344,8 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO total_activos FROM galpones WHERE estado = 'Activo';
   IF total_activos > 0 THEN
-    por_galpon := p_kg / total_activos;
-    UPDATE galpones SET alimento_kg = alimento_kg + por_galpon WHERE estado = 'Activo';
+    por_galpon := p_sacos / total_activos;
+    UPDATE galpones SET alimento_sacos = alimento_sacos + por_galpon WHERE estado = 'Activo';
   END IF;
 END $$;
 
@@ -309,7 +357,9 @@ ALTER TABLE formulas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produccion_molino ENABLE ROW LEVEL SECURITY;
 ALTER TABLE insumos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proveedores ENABLE ROW LEVEL SECURITY;
-ALTER TABLE compras ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ingreso_insumos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ingreso_insumos_detalle ENABLE ROW LEVEL SECURITY;
+ALTER TABLE produccion_molino_insumos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ventas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE almacen_movimientos ENABLE ROW LEVEL SECURITY;
@@ -328,7 +378,7 @@ DECLARE
 BEGIN
   FOR tbl IN SELECT unnest(ARRAY[
     'galpones','produccion','formulas','produccion_molino','insumos',
-    'proveedores','compras','clientes','ventas','almacen_movimientos',
+    'proveedores','ingreso_insumos','ingreso_insumos_detalle','produccion_molino_insumos','clientes','ventas','almacen_movimientos',
     'clasificacion_huevos','consumo_alimento','stock_huevos','alertas','empresa',
     'parametros','usuarios'
   ])
@@ -342,17 +392,17 @@ END $$;
 
 -- 4. DATOS INICIALES
 -- ============================================================
-INSERT INTO galpones (nombre, gallinas) VALUES
-  ('Galpón 4', 12771),
-  ('Galpón 5', 15741),
-  ('Galpón 6', 13891),
-  ('Galpón 8', 13663),
-  ('Galpón Automático', 21801)
+INSERT INTO galpones (nombre, gallinas, alimento_sacos) VALUES
+  ('Galpón 4', 12771, 0),
+  ('Galpón 5', 15741, 0),
+  ('Galpón 6', 13891, 0),
+  ('Galpón 8', 13663, 0),
+  ('Galpón Automático', 21801, 0)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO stock_huevos (clase, cantidad) VALUES
   ('Primera', 0), ('Segunda', 0),
-  ('Pardo', 0), ('Jumbo', 0), ('Sucio', 0), ('Quiñados', 0)
+  ('Pardo', 0), ('Jumbo', 0), ('Sucio', 0), ('Quinados', 0)
 ON CONFLICT (clase) DO NOTHING;
 
 INSERT INTO empresa (nombre, ruc, direccion, telefono) VALUES

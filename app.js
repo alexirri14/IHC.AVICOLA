@@ -6,6 +6,62 @@ const qsa = (sel, el) => (el || document).querySelectorAll(sel);
 // ========== SUPABASE CONFIGURATION ==========
 const SUPABASE_URL = 'https://sjyqskmhywykhzjgqegt.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_tpjoNczX5hYCDjYpHPng1A_9QZflFbM';
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqeXFza21oeXd5a2h6amdxZWd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzEzMjE1NSwiZXhwIjoyMDk4NzA4MTU1fQ.0MPReRVxgu8z2WcIxYX8pM1ucG8y4XK3mA_cE3J-Msw';
+
+// ========== SUPABASE ADMIN API (service_role) ==========
+async function adminCreateUser(email, password, metadata) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'apikey': SUPABASE_SERVICE_KEY },
+    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: metadata })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.msg || 'Error al crear usuario'); }
+  return await res.json();
+}
+
+async function adminUpdateUser(userId, metadata) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'apikey': SUPABASE_SERVICE_KEY },
+    body: JSON.stringify({ user_metadata: metadata })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.msg || 'Error al actualizar usuario'); }
+  return await res.json();
+}
+
+async function adminListUsers() {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'apikey': SUPABASE_SERVICE_KEY }
+  });
+  if (!res.ok) throw new Error('Error al listar usuarios');
+  return await res.json();
+}
+
+// ========== TOKEN HELPERS ==========
+function isTokenExpired(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch { return true; }
+}
+
+async function refreshAuthToken() {
+  const saved = JSON.parse(localStorage.getItem('supabase.auth.token'));
+  if (!saved?.refresh_token) return false;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+      body: JSON.stringify({ refresh_token: saved.refresh_token })
+    });
+    if (!response.ok) return false;
+    const newSession = await response.json();
+    localStorage.setItem('supabase.auth.token', JSON.stringify(newSession));
+    authToken = newSession.access_token;
+    supabaseAuth = new AuthenticatedSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, authToken);
+    return true;
+  } catch { return false; }
+}
 
 // ========== SUPABASE CLIENT ==========
 class SupabaseClient {
@@ -34,12 +90,25 @@ class SupabaseClient {
     try {
       const response = await fetch(fullUrl, options);
       if (!response.ok) {
+        if (response.status === 401 && authToken) {
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            options.headers.Authorization = `Bearer ${authToken}`;
+            const retryResponse = await fetch(fullUrl, options);
+            if (retryResponse.ok) return await retryResponse.json();
+          }
+          mostrarMensaje('Sesión expirada. Por favor, inicie sesión nuevamente.', 'error');
+          cerrarSesion();
+          throw new Error('Sesión expirada');
+        }
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
       }
       return await response.json();
     } catch (error) {
-      mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      if (error.message !== 'Sesión expirada') {
+        mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      }
       throw error;
     }
   }
@@ -69,12 +138,25 @@ class SupabaseClient {
     try {
       const response = await fetch(url, options);
       if (!response.ok) {
+        if (response.status === 401 && authToken) {
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            options.headers.Authorization = `Bearer ${authToken}`;
+            const retryResponse = await fetch(url, options);
+            if (retryResponse.ok) return await retryResponse.json();
+          }
+          mostrarMensaje('Sesión expirada. Por favor, inicie sesión nuevamente.', 'error');
+          cerrarSesion();
+          throw new Error('Sesión expirada');
+        }
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
       }
       return await response.json();
     } catch (error) {
-      mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      if (error.message !== 'Sesión expirada') {
+        mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      }
       throw error;
     }
   }
@@ -93,12 +175,25 @@ class SupabaseClient {
     try {
       const response = await fetch(url, options);
       if (!response.ok) {
+        if (response.status === 401 && authToken) {
+          const refreshed = await refreshAuthToken();
+          if (refreshed) {
+            options.headers.Authorization = `Bearer ${authToken}`;
+            const retryResponse = await fetch(url, options);
+            if (retryResponse.ok) return await retryResponse.json();
+          }
+          mostrarMensaje('Sesión expirada. Por favor, inicie sesión nuevamente.', 'error');
+          cerrarSesion();
+          throw new Error('Sesión expirada');
+        }
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
       }
       return await response.json();
     } catch (error) {
-      mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      if (error.message !== 'Sesión expirada') {
+        mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
+      }
       throw error;
     }
   }
@@ -157,24 +252,44 @@ let sesion = null;
 let currentSection = 'dashboard';
 let toasts = [];
 let toastId = 0;
+let refreshTimer = null;
 
 // Auth state management
 let supabaseAuth = null;
 let authToken = null;
-const savedSession = localStorage.getItem('supabase.auth.token');
-if (savedSession) {
-  try {
-    const parsed = JSON.parse(savedSession);
-    authToken = parsed.access_token || savedSession;
-    sesion = {
-      usuario: parsed.user?.email || parsed.user?.user_metadata?.nombre || 'Usuario',
-      rol: parsed.user?.user_metadata?.rol || 'usuario',
-      id: parsed.user?.id
-    };
-    supabaseAuth = new AuthenticatedSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, authToken);
-    aplicarSesion();
-  } catch { localStorage.removeItem('supabase.auth.token'); }
+
+function scheduleTokenRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  const saved = JSON.parse(localStorage.getItem('supabase.auth.token'));
+  if (!saved?.expires_in) return;
+  const refreshMs = Math.max((saved.expires_in - 120) * 1000, 60000);
+  refreshTimer = setTimeout(async () => {
+    const refreshed = await refreshAuthToken();
+    if (refreshed) scheduleTokenRefresh();
+  }, refreshMs);
 }
+
+(async function initAuth() {
+  const savedSession = localStorage.getItem('supabase.auth.token');
+  if (savedSession) {
+    try {
+      const parsed = JSON.parse(savedSession);
+      authToken = parsed.access_token || savedSession;
+      if (isTokenExpired(authToken)) {
+        const refreshed = await refreshAuthToken();
+        if (!refreshed) { localStorage.removeItem('supabase.auth.token'); authToken = null; return; }
+      }
+      sesion = {
+        usuario: parsed.user?.email || parsed.user?.user_metadata?.nombre || 'Usuario',
+        rol: parsed.user?.user_metadata?.rol || 'usuario',
+        id: parsed.user?.id
+      };
+      supabaseAuth = new AuthenticatedSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, authToken);
+      scheduleTokenRefresh();
+      aplicarSesion();
+    } catch { localStorage.removeItem('supabase.auth.token'); }
+  }
+})();
 
 function getSupabaseAuth() {
   if (!supabaseAuth && authToken) {
@@ -210,12 +325,14 @@ async function signInWithPassword(email, password) {
     id: session.user.id
   };
   
+  scheduleTokenRefresh();
   aplicarSesion();
   mostrarMensaje(`Bienvenido, ${sesion.usuario}`, 'success');
   return session;
 }
 
 function signOut() {
+  if (refreshTimer) clearTimeout(refreshTimer);
   localStorage.removeItem('supabase.auth.token');
   authToken = null;
   supabaseAuth = null;
@@ -294,20 +411,21 @@ async function api(path, options = {}) {
 
   try {
     if (method === 'GET') {
-      const tabs = { '/galpones':['galpones','id.asc'],'/formulas':['formulas','id.asc'],'/produccion':['produccion','fecha.desc'],'/insumos':['insumos','nombre.asc'],'/proveedores':['proveedores','nombre.asc'],'/clientes':['clientes','nombre.asc'],'/compras':['compras','fecha.desc'],'/ventas':['ventas','fecha.desc'] };
+      const tabs = { '/galpones':['galpones','id.asc'],'/formulas':['formulas','id.asc'],'/produccion':['vista_produccion_galpon','fecha.desc'],'/insumos':['insumos','nombre.asc'],'/proveedores':['proveedores','nombre.asc'],'/clientes':['clientes','nombre.asc'],'/ventas':['ventas','fecha.desc'] };
       if (tabs[cleanPath]) { const [t,o]=tabs[cleanPath]; return await c.select(t, '*', {}, { order: o }); }
       const m = cleanPath.match(/^\/(\w+)\/(\d+)$/);
       if (m) { const r = await c.select(m[1], '*', { 'id': 'eq.'+m[2] }); return r[0] || null; }
 
       if (cleanPath === '/alertas') return await c.select('alertas', '*', { activo: 'eq.true' });
       if (cleanPath === '/consumo') return await c.select('consumo_alimento', '*', {}, { order: 'fecha.desc' });
-      if (cleanPath === '/molino') return await c.select('produccion_molino', '*', {}, { order: 'fecha.desc' });
+      if (cleanPath === '/molino') return await c.select('vista_produccion_molino_formula', '*', {}, { order: 'fecha.desc' });
       if (cleanPath === '/molino/stock-alimento') return await c.select('vista_stock_alimento');
       if (cleanPath === '/almacen/huevos') { const s=await c.select('stock_huevos'); const o={}; s.forEach(x=>o[x.clase]=x.cantidad); return {stock:o}; }
       if (cleanPath === '/almacen/movimientos') return await c.select('almacen_movimientos', '*', {}, { order: 'fecha.desc' });
       if (cleanPath === '/configuracion/usuarios') return await c.select('usuarios');
       if (cleanPath === '/configuracion/empresa') { const r = await c.select('empresa'); return r[0] || null; }
       if (cleanPath === '/configuracion/parametros') return await c.select('parametros');
+      if (cleanPath === '/ingresos') return await c.select('vista_ingreso_insumos');
 
       if (cleanPath === '/reportes/dashboard') {
         const [d,ps,vm,ca]=await Promise.all([c.select('vista_dashboard'),c.select('vista_produccion_semanal'),c.select('vista_ventas_mensual'),c.select('vista_consumo_alimento')]);
@@ -319,12 +437,12 @@ async function api(path, options = {}) {
         const desde = urlParams.get('desde') || $('repDesde')?.value || diasAtras(30);
         const hasta = urlParams.get('hasta') || $('repHasta')?.value || hoy();
         const ff = filtroFecha(desde, hasta);
-        if (tab==='produccion') return await c.select('produccion','*',ff,{order:'fecha.desc'});
+        if (tab==='produccion') return await c.select('vista_produccion_galpon','*',ff,{order:'fecha.desc'});
         if (tab==='ventas') return await c.select('ventas','*',ff,{order:'fecha.desc'});
-        if (tab==='inventario') { const [hue,i]=await Promise.all([c.select('stock_huevos'),c.select('insumos')]); return {huevos:hue,insumos:i}; }
-        if (tab==='molino') return await c.select('produccion_molino','*',ff,{order:'fecha.desc'});
-        if (tab==='galpones') { const g=await c.select('galpones'); return await Promise.all(g.map(async g=>{ const p=await c.select('produccion','*',{galpon_id:'eq.'+g.id,...ff},{order:'fecha.desc'}); const mu=p.reduce((s,x)=>s+(x.muertas||0),0); return {...g,produccion:p,mortalidad:mu}; })); }
-        if (tab==='mortalidad') return await c.select('produccion','*',{muertas:'gt.0',...ff},{order:'fecha.desc'});
+        if (tab==='inventario') { const [hue,i]=await Promise.all([c.select('stock_huevos'),c.select('insumos')]); return {huevos:hue.map(h=>({...h,stock:h.cantidad})),insumos:i}; }
+        if (tab==='molino') return await c.select('vista_produccion_molino_formula','*',ff,{order:'fecha.desc'});
+        if (tab==='galpones') { const g=await c.select('galpones'); return await Promise.all(g.map(async g=>{ const p=await c.select('vista_produccion_galpon','*',{galpon_id:'eq.'+g.id,...ff},{order:'fecha.desc'}); const mu=p.reduce((s,x)=>s+(x.muertas||0),0); return {...g,produccion:p,mortalidad:mu}; })); }
+        if (tab==='mortalidad') return await c.select('vista_produccion_galpon','*',{muertas:'gt.0',...ff},{order:'fecha.desc'});
       }
     }
 
@@ -341,16 +459,28 @@ async function api(path, options = {}) {
         return r;
       }
       if (cleanPath === '/molino/producir') {
+        const sacos = body.tandas * 30;
         const kg = body.tandas * 1500;
-        const r=await c.insert('produccion_molino',{fecha:body.fecha,formula_id:body.formula_id,tandas:body.tandas,kg_producidos:kg,costo:body.tandas * 1500 * 1.2});
-        await c.rpc('distribuir_alimento',{p_kg:kg});
-        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Ingreso',detalle:'Producción molino: '+body.tandas+' tandas ('+Math.floor(kg/50)+' sacos)',primera:0,segunda:0});
+        const r=await c.insert('produccion_molino',{fecha:body.fecha,formula_id:body.formula_id,galpon_id:body.galpon_id||null,tandas:body.tandas,kg_producidos:kg,detalle:body.detalle||null});
+        const prodId = r[0]?.id;
+        if (prodId && body.insumos?.length) {
+          for (const ins of body.insumos) {
+            await c.insert('produccion_molino_insumos',{produccion_id:prodId,insumo_id:ins.insumo_id,insumo_nombre:ins.insumo_nombre,cantidad:ins.cantidad});
+          }
+        }
+        await c.rpc('distribuir_alimento',{p_sacos:sacos});
+        await c.insert('almacen_movimientos',{fecha:body.fecha,tipo:'Ingreso',detalle:'Producción molino: '+body.tandas+' tandas ('+sacos+' sacos) '+(body.detalle||''),primera:0,segunda:0});
         return r;
       }
-      if (cleanPath === '/compras') {
-        const total=body.cantidad*body.precio_unitario;
-        const r=await c.insert('compras',{...body,total});
-        await c.rpc('sumar_insumo',{p_id:body.insumo_id,p_cantidad:body.cantidad,p_fecha:body.fecha});
+      if (cleanPath === '/ingresos') {
+        const r=await c.insert('ingreso_insumos',{fecha:body.fecha,proveedor_nombre:body.proveedor_nombre,detalle:body.detalle||null});
+        const ingId = r[0]?.id;
+        if (ingId && body.items?.length) {
+          for (const item of body.items) {
+            await c.insert('ingreso_insumos_detalle',{ingreso_id:ingId,insumo_id:item.insumo_id,insumo_nombre:item.insumo_nombre,cantidad:item.cantidad});
+            await c.rpc('sumar_insumo',{p_id:item.insumo_id,p_cantidad:item.cantidad,p_fecha:body.fecha});
+          }
+        }
         return r;
       }
       if (cleanPath === '/ventas') {
@@ -386,6 +516,16 @@ async function api(path, options = {}) {
       if(cleanPath==='/almacen/clasificar'){ const{fecha,...cls}=body; for(const[k,v]of Object.entries(cls))if(v>0){ const destino = k==='limpieza'?'Primera':k.charAt(0).toUpperCase()+k.slice(1); await c.insert('clasificacion_huevos',{fecha,clase:k,cantidad:v}); await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:v}); await c.rpc('sumar_stock',{p_clase:destino,p_cantidad:v}); await c.insert('almacen_movimientos',{fecha,tipo:'Clasificación',detalle:k+' → '+destino+' ('+v+' jab)',primera:k==='limpieza'?v:0,segunda:k!=='limpieza'?v:0}); } return {success:true}; }
       if(cleanPath==='/configuracion/empresa') return await c.update('empresa',body,{'id':'eq.1'});
     }
+
+    if (method === 'DELETE') {
+      const ds = cleanPath.match(/^\/(ventas|produccion|molino|ingresos)\/(\d+)$/);
+      if (ds) {
+        const tableMap = { ventas:'ventas', produccion:'produccion', molino:'produccion_molino', ingresos:'ingreso_insumos' };
+        return await c.delete(tableMap[ds[1]], { 'id': 'eq.'+ds[2] });
+      }
+      throw new Error('Ruta no implementada: '+method+' '+cleanPath);
+    }
+
     throw new Error('Ruta no implementada: '+method+' '+cleanPath);
   } catch(e){ mostrarMensaje('Error: '+e.message,'error'); throw e; }
 }
@@ -407,6 +547,7 @@ function mostrarMensaje(msg, tipo = 'info') {
 }
 
 function cerrarSesion() {
+  if (refreshTimer) clearTimeout(refreshTimer);
   localStorage.removeItem('supabase.auth.token');
   authToken = null;
   supabaseAuth = null;
@@ -449,7 +590,7 @@ function navegar(section) {
     dashboard: 'Dashboard', galpones: 'Galpones', molino: 'Molino',
     produccion: 'Producción',
     'almacen-huevos': 'Almacén de Huevos', 'almacen-insumos': 'Almacén de Insumos',
-    compras: 'Compras', ventas: 'Ventas', reportes: 'Reportes', configuracion: 'Configuración',
+    compras: 'Ingreso de Insumos', ventas: 'Ventas', reportes: 'Reportes', configuracion: 'Configuración',
   };
   $('sectionTitle').textContent = mapLabels[section] || section;
 
@@ -529,7 +670,7 @@ async function renderDashboard() {
       { icon: '🐔', label: 'Gallinas Vivas', value: (data.gallinas_vivas || 0).toLocaleString(), bg: 'bg-blue' },
       { icon: '🥚', label: 'Producción Hoy', value: num(data.produccion_hoy) + ' jabas', bg: 'bg-green' },
       { icon: '📦', label: 'Stock Huevos', value: num(data.stock_huevos) + ' jabas', bg: 'bg-orange' },
-      { icon: '🌾', label: 'Stock Alimento', value: num(data.stock_alimento) + ' kg', bg: 'bg-blue' },
+      { icon: '🌾', label: 'Stock Alimento', value: num(data.stock_alimento) + ' sacos', bg: 'bg-blue' },
       { icon: '💰', label: 'Ventas Hoy', value: num(data.ventas_hoy) + ' jabas', bg: 'bg-green' },
       { icon: '💀', label: 'Mortalidad Hoy', value: (data.mortalidad_hoy || 0) + ' aves', bg: 'bg-red' },
     ];
@@ -596,7 +737,7 @@ async function renderGalpones() {
     c.appendChild(crearEl('div', { className: 'card' }, [header]));
 
     // Resumen de alimento
-    const totalSacos = galpones.reduce((s, g) => s + Math.floor((g.alimento_kg || 0) / 50), 0);
+    const totalSacos = galpones.reduce((s, g) => s + (g.alimento_sacos || 0), 0);
     const totalGallinas = galpones.reduce((s, g) => s + (g.gallinas || 0), 0);
     c.appendChild(crearEl('div', { style: { display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap', fontSize: '13px' } }, [
       crearEl('span', { className: 'chip chip-blue' }, [`🐔 ${totalGallinas.toLocaleString()} gallinas`]),
@@ -610,8 +751,8 @@ async function renderGalpones() {
 
     const grid = crearEl('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' } });
     for (const g of galpones) {
-      const edadCalc = g.fecha_ingreso ? Math.floor((Date.now() - new Date(g.fecha_ingreso + 'T12:00:00').getTime()) / (86400000)) : g.edad_lote || 0;
-      const sacos = Math.floor((g.alimento_kg || 0) / 50);
+      const edadCalc = g.fecha_ingreso ? Math.floor((Date.now() - new Date(g.fecha_ingreso + 'T12:00:00').getTime()) / (86400000)) : 0;
+      const sacos = g.alimento_sacos || 0;
       const consSacos = g.consumo_diario || 0;
       const diasAlimento = consSacos > 0 ? Math.floor(sacos / consSacos) : 99;
       const alerta = diasAlimento < 3 ? '🔴' : diasAlimento < 7 ? '⚠️' : '✅';
@@ -680,7 +821,7 @@ async function eliminarConsumo(con) {
   try {
     const c = getSupabaseAuth();
     const gal = await c.select('galpones', '*', { 'id': 'eq.'+con.galpon_id });
-    if (gal[0]) await c.update('galpones', { 'alimento_kg': (gal[0].alimento_kg || 0) + (con.kg_consumidos || 0) }, { 'id': 'eq.'+con.galpon_id });
+    if (gal[0]) await c.update('galpones', { 'alimento_sacos': (gal[0].alimento_sacos || 0) + (con.sacos_50kg || 0) }, { 'id': 'eq.'+con.galpon_id });
     await c.delete('consumo_alimento', { 'id': 'eq.'+con.id });
     mostrarMensaje('Registro eliminado y alimento restaurado', 'success');
     renderGalpones();
@@ -693,27 +834,27 @@ function modalGalpon(g) {
     return api('/galpones', { method: 'POST', body: data });
   }, [
     { label: 'Nombre', name: 'nombre', type: 'text', value: g?.nombre || '', required: true },
-    { label: 'Capacidad', name: 'capacidad', type: 'number', value: g?.capacidad || 0 },
     { label: 'Gallinas', name: 'gallinas', type: 'number', value: g?.gallinas || 0 },
-    { label: 'Edad Lote (días)', name: 'edad_lote', type: 'number', value: g?.edad_lote || 0 },
-    { label: 'Consumo Diario (sacos)', name: 'consumo_diario', type: 'number', value: g?.consumo_diario || 0, step: '0.1' },
+    { label: 'Consumo Diario (sacos/día)', name: 'consumo_diario', type: 'number', value: g?.consumo_diario || 0, step: '0.1' },
+    { label: 'Stock Alimento (sacos)', name: 'alimento_sacos', type: 'number', value: g?.alimento_sacos || 0, step: '1' },
     { label: 'Fecha Ingreso', name: 'fecha_ingreso', type: 'date', value: g?.fecha_ingreso || '' },
+    { label: 'Prod. Promedio (jabas/día)', name: 'produccion_promedio', type: 'number', value: g?.produccion_promedio || 0, step: '0.5' },
   ], renderGalpones);
 }
 
 async function modalGalponDetalle(g) {
   let data;
   try { data = await api('/galpones/' + g.id); } catch { data = g; }
+  const edadCalc = data.fecha_ingreso ? Math.floor((Date.now() - new Date(data.fecha_ingreso + 'T12:00:00').getTime()) / (86400000)) : 0;
   const consumos = await api('/consumo');
   const hist = consumos.filter(c => c.galpon_id === g.id).slice(0,10);
   const fields = [
     { label: 'Estado', type: 'static', value: data.estado || 'Activo' },
     { label: 'Gallinas Vivas', type: 'static', value: (data.gallinas || 0).toLocaleString() },
-    { label: 'Capacidad', type: 'static', value: (data.capacidad || 0).toLocaleString() },
-    { label: 'Edad Lote', type: 'static', value: `${data.edad_lote || 0} días` },
     { label: 'Fecha Ingreso', type: 'static', value: formatearFecha(data.fecha_ingreso) },
-    { label: 'Alimento', type: 'static', value: `${Math.floor((data.alimento_kg||0)/50)} sacos (${num(data.alimento_kg)} kg)` },
-    { label: 'Consumo Diario', type: 'static', value: `${num(data.consumo_diario)} sacos (${num((data.consumo_diario||0)*50)} kg)` },
+    { label: 'Edad', type: 'static', value: `${edadCalc} días` },
+    { label: 'Alimento', type: 'static', value: `${num(data.alimento_sacos)} sacos` },
+    { label: 'Consumo Diario', type: 'static', value: `${num(data.consumo_diario)} sacos` },
     { label: 'Prod. Promedio', type: 'static', value: `${num(data.produccion_promedio)} jabas/día` },
   ];
   if (hist.length) {
@@ -733,15 +874,19 @@ async function modalGalponDetalle(g) {
 }
 
 // --- MOLINO ---
+let molinoInsumos = [];
+
 async function renderMolino() {
   const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
   try {
-    const [formulas, producciones, stockAlim] = await Promise.all([
+    const [formulas, producciones, stockAlim, galpones, insumos] = await Promise.all([
       api('/formulas'), api('/molino'), api('/molino/stock-alimento'),
+      api('/galpones'), api('/insumos'),
     ]);
     vaciar(c);
 
     // Fabricar form
+    molinoInsumos = [];
     const formCard = crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Fabricar Alimento'])]),
       crearEl('div', { className: 'form-grid' }, [
@@ -757,15 +902,40 @@ async function renderMolino() {
           ]),
         ]),
         crearEl('div', { className: 'form-group' }, [
+          crearEl('label', {}, ['Galpón']),
+          crearEl('select', { id: 'molinoGalpon' }, [
+            crearEl('option', { value: '' }, ['Todos (distribuir)']),
+            ...galpones.map(g => crearEl('option', { value: g.id }, [g.nombre])),
+          ]),
+        ]),
+        crearEl('div', { className: 'form-group' }, [
           crearEl('label', {}, ['Tandas']),
           crearEl('input', { id: 'molinoTandas', type: 'number', value: '1', min: '0.1', step: '0.1' }),
         ]),
+        crearEl('div', { className: 'form-group', style: { gridColumn: '1 / -1' } }, [
+          crearEl('label', {}, ['Detalle']),
+          crearEl('input', { id: 'molinoDetalle', type: 'text', placeholder: 'Nota opcional' }),
+        ]),
       ]),
+      crearEl('div', { className: 'card-header', style: { marginTop: '8px' } }, [crearEl('h4', { style: { fontSize: '14px' } }, ['Insumos Utilizados'])]),
+      crearEl('div', { id: 'molinoInsumosContainer', style: { marginBottom: '8px' } }),
+      crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => {
+        // Preserve current selections
+        molinoInsumos.forEach((_, idx) => {
+          const sel = $('molinoIns_' + idx);
+          const cant = $('molinoInsCant_' + idx);
+          if (sel) molinoInsumos[idx].insumo_id = parseInt(sel.value) || '';
+          if (cant) molinoInsumos[idx].cantidad = cant.value;
+        });
+        molinoInsumos.push({ insumo_id: '', insumo_nombre: '', cantidad: '0' });
+        renderMolinoInsumos(insumos);
+      } }, ['+ Agregar Insumo']),
       crearEl('div', { style: { marginTop: '12px' } }, [
         crearEl('button', { className: 'btn btn-green', onClick: fabricarAlimento }, ['🌾 Fabricar']),
       ]),
     ]);
     c.appendChild(formCard);
+    renderMolinoInsumos(insumos);
 
     // Stock Alimento
     if (stockAlim.length) {
@@ -773,16 +943,16 @@ async function renderMolino() {
         crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Stock Alimento en Galpones'])]),
         crearEl('div', { className: 'table-wrap' }, [
           crearEl('table', {}, [
-            crearEl('thead', {}, [crearEl('tr', {}, ['Galpón','Stock (kg)','Consumo/día','Días restantes','Barra'].map(h => crearEl('th', {}, [h])))]),
+            crearEl('thead', {}, [crearEl('tr', {}, ['Galpón','Stock (sacos)','Consumo/día','Días restantes','Barra'].map(h => crearEl('th', {}, [h])))]),
             crearEl('tbody', {}, stockAlim.map(g => {
-              const sacosStock = Math.floor((g.kg || 0) / 50);
+              const sacosStock = g.sacos || 0;
               const consSacos = g.consumo_diario || 0;
               const dias = consSacos > 0 ? Math.floor(sacosStock / consSacos) : 99;
-              const maxRef = Math.max(...stockAlim.map(s => s.kg || 0), 1);
-              const pct = Math.min(((g.kg || 0) / maxRef) * 100, 100);
+              const maxRef = Math.max(...stockAlim.map(s => s.sacos || 0), 1);
+              const pct = Math.min(((g.sacos || 0) / maxRef) * 100, 100);
               return crearEl('tr', {}, [
                 crearEl('td', {}, [g.nombre]),
-                crearEl('td', {}, [`${sacosStock} sacos`]),
+                crearEl('td', {}, [`${num(sacosStock)} sacos`]),
                 crearEl('td', {}, [`${num(g.consumo_diario)} sacos`]),
                 crearEl('td', {}, [crearEl('span', { className: dias >= 7 ? 'chip chip-green' : dias >= 3 ? 'chip chip-orange' : 'chip chip-red' }, [dias + ' días'])]),
                 crearEl('td', {}, [
@@ -803,31 +973,123 @@ async function renderMolino() {
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Producción'])]),
       crearEl('div', { className: 'table-wrap' }, [
         crearEl('table', {}, [
-          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Fórmula','Tandas','Kg Producidos','Costo'].map(h => crearEl('th', {}, [h])))]),
-          crearEl('tbody', {}, producciones.length ? producciones.map(p => crearEl('tr', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Fórmula','Galpón','Tandas','Kg','Detalle','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, producciones.length ? producciones.map(p => crearEl('tr', { style: { cursor: 'pointer' }, onClick: () => verDetalleMolino(p) }, [
             crearEl('td', {}, [formatearFecha(p.fecha)]),
             crearEl('td', {}, [p.formula_nombre || '-']),
+            crearEl('td', {}, [p.galpon_nombre || 'Todos']),
             crearEl('td', {}, [num(p.tandas)]),
             crearEl('td', {}, [num(p.kg_producidos)]),
-            crearEl('td', {}, ['S/ ' + num(p.costo)]),
-          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+            crearEl('td', { style: { fontSize: '12px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, [p.detalle || '-']),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: (e) => { e.stopPropagation(); eliminarProduccionMolino(p); } }, ['🗑'])]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '7', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
         ]),
       ]),
     ]));
   } catch { c.innerHTML = '<div class="card">Error al cargar molino</div>'; }
 }
 
+function renderMolinoInsumos(insumos) {
+  const container = $('molinoInsumosContainer'); vaciar(container);
+  molinoInsumos.forEach((item, idx) => {
+    const row = crearEl('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' } }, [
+      crearEl('select', { id: 'molinoIns_' + idx, style: { flex: 1 } }, [
+        crearEl('option', { value: '' }, ['Seleccione insumo...']),
+        ...insumos.map(i => crearEl('option', { value: i.id, label: i.nombre, selected: i.insumo_id === i.id }, [i.nombre])),
+      ]),
+      crearEl('input', { id: 'molinoInsCant_' + idx, type: 'number', value: item.cantidad || '0', min: '0', step: '0.01', style: { width: '100px' }, placeholder: 'Cant. (kg)' }),
+      crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px', padding: '4px 8px' }, onClick: () => { molinoInsumos.splice(idx, 1); renderMolinoInsumos(insumos); } }, ['✕']),
+    ]);
+    container.appendChild(row);
+  });
+}
+
 async function fabricarAlimento() {
   const fecha = $('molinoFecha')?.value || hoy();
   const formula_id = parseInt($('molinoFormula')?.value);
+  const galpon_id = parseInt($('molinoGalpon')?.value) || null;
   const tandas = parseFloat($('molinoTandas')?.value);
+  const detalle = $('molinoDetalle')?.value?.trim() || '';
   if (!formula_id) return mostrarMensaje('Seleccione una fórmula', 'warning');
   if (!tandas || tandas <= 0) return mostrarMensaje('Ingrese cantidad de tandas', 'warning');
+  const insumos = [];
+  molinoInsumos.forEach((_, idx) => {
+    const sel = $('molinoIns_' + idx);
+    const cant = parseFloat($('molinoInsCant_' + idx)?.value);
+    if (sel && sel.value && cant > 0) {
+      insumos.push({ insumo_id: parseInt(sel.value), insumo_nombre: sel.options[sel.selectedIndex].text, cantidad: cant });
+    }
+  });
   try {
-    await api('/molino/producir', { method: 'POST', body: { fecha, formula_id, tandas } });
+    await api('/molino/producir', { method: 'POST', body: { fecha, formula_id, galpon_id, tandas, detalle, insumos } });
     mostrarMensaje('Alimento fabricado exitosamente', 'success');
     renderMolino();
   } catch { }
+}
+
+async function verDetalleMolino(p) {
+  let items = [];
+  try {
+    const c = getSupabaseAuth();
+    items = await c.select('produccion_molino_insumos', '*', { 'produccion_id': 'eq.'+p.id });
+  } catch {}
+  abrirModal('Producción: ' + formatearFecha(p.fecha), ['Cerrar'], async () => {}, [
+    { label: 'Fecha', type: 'static', value: formatearFecha(p.fecha) },
+    { label: 'Fórmula', type: 'static', value: p.formula_nombre || '-' },
+    { label: 'Galpón', type: 'static', value: p.galpon_nombre || 'Todos (distribuido)' },
+    { label: 'Tandas', type: 'static', value: num(p.tandas) },
+    { label: 'Kg Producidos', type: 'static', value: num(p.kg_producidos) },
+    { label: 'Detalle', type: 'static', value: p.detalle || '-' },
+    { label: 'Insumos usados', type: 'custom', render: () => crearEl('table', { style: { width: '100%', fontSize: '12px' } }, [
+      crearEl('thead', {}, [crearEl('tr', {}, ['Insumo','Cantidad (kg)'].map(h => crearEl('th', {}, [h])))]),
+      crearEl('tbody', {}, items.length ? items.map(i => crearEl('tr', {}, [
+        crearEl('td', {}, [i.insumo_nombre || '-']),
+        crearEl('td', {}, [num(i.cantidad)]),
+      ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '2', style: { textAlign: 'center' } }, ['Sin registros'])])]),
+    ]) },
+  ]);
+}
+
+async function eliminarProduccionMolino(p) {
+  if (!confirm('¿Eliminar esta producción de alimento?')) return;
+  try {
+    await api('/molino/' + p.id, { method: 'DELETE' });
+    mostrarMensaje('Producción eliminada', 'success');
+    renderMolino();
+  } catch {}
+}
+
+function verDetalleVenta(v) {
+  const cats = ['primera','pardo','jumbo','sucio','quinados'];
+  const detalles = cats.filter(k => parseFloat(v[k]) > 0).map(k => `${k}: ${num(v[k])} jab`).join(', ');
+  abrirModal('Venta: ' + formatearFecha(v.fecha), ['Cerrar'], async () => {}, [
+    { label: 'Fecha', type: 'static', value: formatearFecha(v.fecha) },
+    { label: 'Cliente', type: 'static', value: v.cliente_nombre || '-' },
+    { label: 'Detalle', type: 'static', value: detalles || 'Sin detalle' },
+    { label: 'Total Jabas', type: 'static', value: num(v.total_jabas) },
+    { label: 'Peso (kg)', type: 'static', value: num(v.peso) },
+    { label: 'Total', type: 'static', value: 'S/ ' + num(v.total) },
+    { label: 'Precio Primera', type: 'static', value: 'S/ ' + num(v.precio_primera) + ' x kg' },
+    { label: 'Precio Segunda', type: 'static', value: 'S/ ' + num(v.precio_segunda) + ' x kg' },
+  ]);
+}
+
+async function eliminarVenta(v) {
+  if (!confirm('¿Eliminar esta venta?')) return;
+  try {
+    await api('/ventas/' + v.id, { method: 'DELETE' });
+    mostrarMensaje('Venta eliminada', 'success');
+    renderReporteData();
+  } catch {}
+}
+
+async function eliminarProduccion(p) {
+  if (!confirm('¿Eliminar esta producción?')) return;
+  try {
+    await api('/produccion/' + p.id, { method: 'DELETE' });
+    mostrarMensaje('Producción eliminada', 'success');
+    renderReporteData();
+  } catch {}
 }
 
 // --- PRODUCCIÓN ---
@@ -904,7 +1166,7 @@ async function renderAlmacenHuevos() {
       { label: 'Pardo', clase: 'Pardo', bg: 'bg-purple' },
       { label: 'Jumbo', clase: 'Jumbo', bg: 'bg-purple' },
       { label: 'Sucio', clase: 'Sucio', bg: 'bg-purple' },
-      { label: 'Quiñados', clase: 'Quiñados', bg: 'bg-purple' },
+      { label: 'Quinados', clase: 'Quinados', bg: 'bg-purple' },
     ];
     let totalJabas = 0;
     const statsGrid = crearEl('div', { className: 'stats-grid' });
@@ -953,7 +1215,7 @@ async function renderAlmacenHuevos() {
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Jumbo']), crearEl('input', { id: 'clasifJumbo', type: 'number', value: '0', min: '0', step: '0.5' })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Sucio']), crearEl('input', { id: 'clasifSucio', type: 'number', value: '0', min: '0', step: '0.5' })]),
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Limpieza']), crearEl('input', { id: 'clasifLimpieza', type: 'number', value: '0', min: '0', step: '0.5' })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Quiñados']), crearEl('input', { id: 'clasifQuinados', type: 'number', value: '0', min: '0', step: '0.5' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Quinados']), crearEl('input', { id: 'clasifQuinados', type: 'number', value: '0', min: '0', step: '0.5' })]),
       ]),
       crearEl('div', { style: { marginTop: '12px' } }, [
         crearEl('button', { className: 'btn btn-primary', onClick: clasificarSegunda }, ['Clasificar']),
@@ -1034,69 +1296,131 @@ async function renderAlmacenInsumos() {
   } catch { c.innerHTML = '<div class="card">Error al cargar insumos</div>'; }
 }
 
-// --- COMPRAS ---
+// --- INGRESO DE INSUMOS ---
+let ingresoItems = [];
+let insumosList = [];
+
 async function renderCompras() {
   const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
   try {
-    const [compras, proveedores, insumos] = await Promise.all([
-      api('/compras'), api('/proveedores'), api('/insumos'),
+    const [ingresos, insumos] = await Promise.all([
+      api('/ingresos'), api('/insumos'),
     ]);
+    insumosList = insumos;
     vaciar(c);
 
-    // Nueva compra
-    c.appendChild(crearEl('div', { className: 'card' }, [
-      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Nueva Compra'])]),
+    // Nuevo ingreso
+    const formCard = crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Nuevo Ingreso de Insumos'])]),
       crearEl('div', { className: 'form-grid' }, [
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'compraFecha', type: 'date', value: hoy() })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Proveedor']), crearEl('select', { id: 'compraProveedor' }, [
-          crearEl('option', { value: '' }, ['Seleccione...']),
-          ...proveedores.map(p => crearEl('option', { value: p.id, label: p.nombre }, [p.nombre])),
-        ])]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Insumo']), crearEl('select', { id: 'compraInsumo' }, [
-          crearEl('option', { value: '' }, ['Seleccione...']),
-          ...insumos.map(i => crearEl('option', { value: i.id, label: i.nombre }, [i.nombre])),
-        ])]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Cantidad']), crearEl('input', { id: 'compraCantidad', type: 'number', value: '1', min: '0.01', step: '0.01' })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio Unit.']), crearEl('input', { id: 'compraPrecio', type: 'number', value: '0', min: '0', step: '0.01' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Fecha']), crearEl('input', { id: 'ingresoFecha', type: 'date', value: hoy() })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Proveedor']), crearEl('input', { id: 'ingresoProveedor', type: 'text', placeholder: 'Nombre del proveedor' })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Detalle']), crearEl('input', { id: 'ingresoDetalle', type: 'text', placeholder: 'Opcional' })]),
       ]),
+      crearEl('div', { className: 'card-header', style: { marginTop: '12px' } }, [crearEl('h4', { style: { fontSize: '14px' } }, ['Insumos'])]),
+      crearEl('div', { id: 'ingresoItemsContainer', style: { marginBottom: '8px' } }),
+      crearEl('button', { className: 'btn btn-outline btn-sm', onClick: agregarItemIngreso }, ['+ Agregar Insumo']),
       crearEl('div', { style: { marginTop: '12px' } }, [
-        crearEl('button', { className: 'btn btn-green', onClick: registrarCompra }, ['🛒 Registrar Compra']),
+        crearEl('button', { className: 'btn btn-green', onClick: registrarIngreso }, ['📦 Registrar Ingreso']),
       ]),
-    ]));
+    ]);
+    c.appendChild(formCard);
+
+    ingresoItems = [];
+    renderIngresoItems(insumos);
 
     // Historial
     c.appendChild(crearEl('div', { className: 'card' }, [
-      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Compras'])]),
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Ingresos de Insumos'])]),
       crearEl('div', { className: 'table-wrap' }, [
         crearEl('table', {}, [
-          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Proveedor','Insumo','Cantidad','P.Unit.','Total'].map(h => crearEl('th', {}, [h])))]),
-          crearEl('tbody', {}, compras.length ? compras.map(cp => crearEl('tr', {}, [
-            crearEl('td', {}, [formatearFecha(cp.fecha)]),
-            crearEl('td', {}, [cp.proveedor_nombre || '-']),
-            crearEl('td', {}, [cp.insumo_nombre || '-']),
-            crearEl('td', {}, [num(cp.cantidad)]),
-            crearEl('td', {}, ['S/ ' + num(cp.precio_unitario)]),
-            crearEl('td', {}, ['S/ ' + num(cp.total)]),
-          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '6', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Proveedor','Detalle','Insumos','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, ingresos.length ? ingresos.map(ing => {
+            const items = typeof ing.items === 'string' ? JSON.parse(ing.items) : (ing.items || []);
+            const resumen = items.map(i => `${i.insumo_nombre}: ${num(i.cantidad)}`).join(', ');
+            return crearEl('tr', { style: { cursor: 'pointer' }, onClick: () => verDetalleIngreso(ing) }, [
+              crearEl('td', {}, [formatearFecha(ing.fecha)]),
+              crearEl('td', {}, [ing.proveedor_nombre || '-']),
+              crearEl('td', {}, [ing.detalle || '-']),
+              crearEl('td', { style: { fontSize: '12px' } }, [resumen || '-']),
+              crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: (e) => { e.stopPropagation(); eliminarIngreso(ing); } }, ['🗑'])]),
+            ]);
+          }) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
         ]),
       ]),
     ]));
-  } catch { c.innerHTML = '<div class="card">Error al cargar compras</div>'; }
+  } catch { c.innerHTML = '<div class="card">Error al cargar ingresos</div>'; }
 }
 
-async function registrarCompra() {
-  const fecha = $('compraFecha')?.value || hoy();
-  const proveedor_id = parseInt($('compraProveedor')?.value);
-  const insumo_id = parseInt($('compraInsumo')?.value);
-  const cantidad = parseFloat($('compraCantidad')?.value);
-  const precio_unitario = parseFloat($('compraPrecio')?.value) || 0;
-  if (!proveedor_id || !insumo_id) return mostrarMensaje('Complete todos los campos', 'warning');
-  if (!cantidad || cantidad <= 0) return mostrarMensaje('Ingrese cantidad válida', 'warning');
-  const proveedor = $('compraProveedor')?.selectedOptions[0]?.text || '';
-  const insumo = $('compraInsumo')?.selectedOptions[0]?.text || '';
+function renderIngresoItems(insumos) {
+  const container = $('ingresoItemsContainer'); vaciar(container);
+  ingresoItems.forEach((item, idx) => {
+    const row = crearEl('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' } }, [
+      crearEl('select', { id: 'ingresoInsumo_' + idx, style: { flex: 1 } }, [
+        crearEl('option', { value: '' }, ['Seleccione insumo...']),
+        ...insumos.map(i => crearEl('option', { value: i.id, label: i.nombre, selected: i.id === item.insumo_id }, [i.nombre])),
+      ]),
+      crearEl('input', { id: 'ingresoCant_' + idx, type: 'number', value: item.cantidad || '1', min: '0.01', step: '0.01', style: { width: '100px' }, placeholder: 'Cantidad' }),
+      crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px', padding: '4px 8px' }, onClick: () => { ingresoItems.splice(idx, 1); renderIngresoItems(insumos); } }, ['✕']),
+    ]);
+    container.appendChild(row);
+  });
+}
+
+function agregarItemIngreso() {
+  // Preserve current selections before re-render
+  ingresoItems.forEach((_, idx) => {
+    const sel = $('ingresoInsumo_' + idx);
+    const cant = $('ingresoCant_' + idx);
+    if (sel) ingresoItems[idx].insumo_id = parseInt(sel.value) || '';
+    if (cant) ingresoItems[idx].cantidad = cant.value;
+  });
+  ingresoItems.push({ insumo_id: '', cantidad: '1' });
+  renderIngresoItems(insumosList);
+}
+
+async function registrarIngreso() {
+  const fecha = $('ingresoFecha')?.value || hoy();
+  const proveedor = $('ingresoProveedor')?.value?.trim();
+  const detalle = $('ingresoDetalle')?.value?.trim();
+  if (!proveedor) return mostrarMensaje('Ingrese el nombre del proveedor', 'warning');
+  const items = [];
+  ingresoItems.forEach((_, idx) => {
+    const sel = $('ingresoInsumo_' + idx);
+    const cant = parseFloat($('ingresoCant_' + idx)?.value);
+    if (sel && sel.value && cant > 0) {
+      items.push({ insumo_id: parseInt(sel.value), insumo_nombre: sel.options[sel.selectedIndex].text, cantidad: cant });
+    }
+  });
+  if (!items.length) return mostrarMensaje('Agregue al menos un insumo con cantidad', 'warning');
   try {
-    await api('/compras', { method: 'POST', body: { fecha, proveedor_id, proveedor_nombre: proveedor, insumo_id, insumo_nombre: insumo, cantidad, precio_unitario } });
-    mostrarMensaje('Compra registrada', 'success');
+    await api('/ingresos', { method: 'POST', body: { fecha, proveedor_nombre: proveedor, detalle, items } });
+    mostrarMensaje('Ingreso registrado', 'success');
+    renderCompras();
+  } catch {}
+}
+
+function verDetalleIngreso(ing) {
+  const items = typeof ing.items === 'string' ? JSON.parse(ing.items) : (ing.items || []);
+  abrirModal('Ingreso: ' + formatearFecha(ing.fecha), ['Cerrar'], async () => {}, [
+    { label: 'Fecha', type: 'static', value: formatearFecha(ing.fecha) },
+    { label: 'Proveedor', type: 'static', value: ing.proveedor_nombre || '-' },
+    { label: 'Detalle', type: 'static', value: ing.detalle || '-' },
+    { label: 'Insumos', type: 'custom', render: () => crearEl('table', { style: { width: '100%', fontSize: '12px' } }, [
+      crearEl('thead', {}, [crearEl('tr', {}, ['Insumo','Cantidad'].map(h => crearEl('th', {}, [h])))]),
+      crearEl('tbody', {}, items.length ? items.map(i => crearEl('tr', {}, [
+        crearEl('td', {}, [i.insumo_nombre]),
+        crearEl('td', {}, [num(i.cantidad)]),
+      ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '2', style: { textAlign: 'center' } }, ['Sin datos'])])]),
+    ]) },
+  ]);
+}
+
+async function eliminarIngreso(ing) {
+  if (!confirm('¿Eliminar este ingreso de insumos?')) return;
+  try {
+    await api('/ingresos/' + ing.id, { method: 'DELETE' });
+    mostrarMensaje('Ingreso eliminado', 'success');
     renderCompras();
   } catch {}
 }
@@ -1124,12 +1448,12 @@ async function renderVentas() {
       ]),
       crearEl('div', { className: 'form-grid', style: { gap: '8px', marginTop: '8px' } }, [
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg PRIMERA']), crearEl('input', { id: 'precioPrimera', type: 'number', value: '4.50', min: '0', step: '0.01', onInput: calcVenta })]),
-        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg SEGUNDA (Pardo, Jumbo, Sucio, Quiñados)']), crearEl('input', { id: 'precioSegunda', type: 'number', value: '3.50', min: '0', step: '0.01', onInput: calcVenta })]),
+        crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Precio x kg SEGUNDA (Pardo, Jumbo, Sucio, Quinados)']), crearEl('input', { id: 'precioSegunda', type: 'number', value: '3.50', min: '0', step: '0.01', onInput: calcVenta })]),
       ]),
       crearEl('div', { style: { marginTop: '8px', display: 'flex', gap: '12px', alignItems: 'center' } }, [
         crearEl('label', { style: { fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' } }, [
           crearEl('input', { id: 'ventaMostrarSucio', type: 'checkbox', onchange: toggleVentaSucio }),
-          ' Incluir Sucio / Quiñados',
+          ' Incluir Sucio / Quinados',
         ]),
       ]),
       crearEl('div', { className: 'table-wrap', style: { marginTop: '8px' } }, [crearEl('table', {}, [
@@ -1158,7 +1482,7 @@ async function renderVentas() {
             crearEl('td', { id: 'ventaSub_sucio', style: { fontWeight: 600 } }, ['S/ 0.00']),
           ]),
           crearEl('tr', { id: 'ventaRowQuinados', style: { display: 'none' } }, [
-            crearEl('td', { style: { fontWeight: 500 } }, ['Quiñados']),
+            crearEl('td', { style: { fontWeight: 500 } }, ['Quinados']),
             crearEl('td', {}, [crearEl('input', { id: 'venta_quinados', type: 'number', value: '0', min: '0', step: '0.5', style: { width: '80px' }, onInput: calcVenta })]),
             crearEl('td', { id: 'ventaSub_quinados', style: { fontWeight: 600 } }, ['S/ 0.00']),
           ]),
@@ -1284,9 +1608,30 @@ async function renderReporteData() {
     vaciar(div);
 
     if (reportesTab === 'produccion') {
-      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Galpón','Primera','Segunda','Total','Muertas'], data.map(p => [formatearFecha(p.fecha), p.galpon_nombre||'-', num(p.primera), num(p.segunda), num((p.primera||0)+(p.segunda||0)), p.muertas||0]))]));
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+        crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Total','Muertas','Acción'].map(h => crearEl('th', {}, [h])))]),
+        crearEl('tbody', {}, data.length ? data.map(p => crearEl('tr', {}, [
+          crearEl('td', {}, [formatearFecha(p.fecha)]),
+          crearEl('td', {}, [p.galpon_nombre||'-']),
+          crearEl('td', {}, [num(p.primera)]),
+          crearEl('td', {}, [num(p.segunda)]),
+          crearEl('td', {}, [num((p.primera||0)+(p.segunda||0))]),
+          crearEl('td', {}, [p.muertas||0]),
+          crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: () => eliminarProduccion(p) }, ['🗑'])]),
+        ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '7', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin datos'])])]),
+      ])]));
     } else if (reportesTab === 'ventas') {
-      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Cliente','Jabas','Peso','Total'], data.map(v => [formatearFecha(v.fecha), v.cliente_nombre||'-', num(v.total_jabas), num(v.peso), 'S/ '+num(v.total)]))]));
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+        crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Cliente','Jabas','Peso','Total','Acción'].map(h => crearEl('th', {}, [h])))]),
+        crearEl('tbody', {}, data.length ? data.map(v => crearEl('tr', { style: { cursor: 'pointer' }, onClick: () => verDetalleVenta(v) }, [
+          crearEl('td', {}, [formatearFecha(v.fecha)]),
+          crearEl('td', {}, [v.cliente_nombre||'-']),
+          crearEl('td', {}, [num(v.total_jabas)]),
+          crearEl('td', {}, [num(v.peso)]),
+          crearEl('td', {}, ['S/ '+num(v.total)]),
+          crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: (e) => { e.stopPropagation(); eliminarVenta(v); } }, ['🗑'])]),
+        ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '6', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin datos'])])]),
+      ])]));
     } else if (reportesTab === 'inventario') {
       const huevos = data.huevos || [];
       div.appendChild(crearEl('h4', { style: { fontSize: '13px', marginBottom: '8px' } }, ['Stock Huevos']));
@@ -1294,7 +1639,18 @@ async function renderReporteData() {
       div.appendChild(crearEl('h4', { style: { fontSize: '13px', margin: '16px 0 8px' } }, ['Stock Insumos']));
       div.appendChild(crearEl('div', { className: 'table-wrap', style: { marginTop: '8px' } }, [crearTabla(['Producto','Stock (kg)','Stock Mínimo'], data.insumos?.map(i => [i.nombre, num(i.cantidad_kg), num(i.stock_minimo_kg)]) || [])]));
     } else if (reportesTab === 'molino') {
-      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearTabla(['Fecha','Fórmula','Tandas','Kg','Costo'], data.map(m => [formatearFecha(m.fecha), m.formula_nombre||'-', num(m.tandas), num(m.kg_producidos), 'S/ '+num(m.costo)]))]));
+      div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+        crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Fórmula','Galpón','Tandas','Kg','Detalle','Acción'].map(h => crearEl('th', {}, [h])))]),
+        crearEl('tbody', {}, data.length ? data.map(m => crearEl('tr', { style: { cursor: 'pointer' }, onClick: () => verDetalleMolino(m) }, [
+          crearEl('td', {}, [formatearFecha(m.fecha)]),
+          crearEl('td', {}, [m.formula_nombre||'-']),
+          crearEl('td', {}, [m.galpon_nombre||'Todos']),
+          crearEl('td', {}, [num(m.tandas)]),
+          crearEl('td', {}, [num(m.kg_producidos)]),
+          crearEl('td', { style: { fontSize: '12px' } }, [m.detalle||'-']),
+          crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: (e) => { e.stopPropagation(); eliminarProduccionMolino(m); } }, ['🗑'])]),
+        ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '7', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin datos'])])]),
+      ])]));
     } else if (reportesTab === 'galpones') {
       for (const g of data) {
         const card = crearEl('div', { className: 'card' }, [
@@ -1326,10 +1682,38 @@ async function renderConfiguracion() {
   ].map(([k, v]) => crearEl('div', { className: `tab ${k === configTab ? 'active' : ''}`, onClick: () => { configTab = k; renderConfiguracion(); } }, [v]))));
   if (configTab === 'usuarios') {
     try {
-      const usuarios = await api('/configuracion/usuarios');
+      const [usuarios, authUsers] = await Promise.all([
+        api('/configuracion/usuarios'),
+        adminListUsers().catch(() => ({ users: [] }))
+      ]);
+      const localByEmail = {};
+      usuarios.forEach(u => { localByEmail[u.usuario] = u; });
+      const merged = [];
+      (authUsers.users || []).forEach(au => {
+        const local = localByEmail[au.email];
+        merged.push({ email: au.email, rol: au.raw_user_meta_data?.rol || local?.rol || 'usuario', authId: au.id, au, local });
+      });
+      usuarios.forEach(u => {
+        if (!merged.some(m => m.email === u.usuario)) {
+          merged.push({ email: u.usuario, rol: u.rol, authId: null, au: null, local: u });
+        }
+      });
       c.appendChild(crearEl('div', { className: 'card' }, [
         crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Usuarios']), crearEl('div', { className: 'actions' }, [crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => modalUsuario(null) }, ['+ Nuevo'])])]),
-        crearEl('div', { className: 'table-wrap' }, [crearTabla(['Usuario','Rol','Empleado','Activo'], usuarios.map(u => [u.usuario, u.rol, u.empleado_nombre||'-', u.activo ? '✅' : '❌']))]),
+        crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Email','Rol','Auth ID','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, merged.map(m => {
+            return crearEl('tr', {}, [
+              crearEl('td', { style: { fontWeight: 500 } }, [m.email]),
+              crearEl('td', {}, [crearEl('span', { className: 'chip chip-blue' }, [m.rol])]),
+              crearEl('td', { style: { fontSize: '11px', color: 'var(--text3)' } }, [m.authId ? m.authId.slice(0,8)+'...' : '-']),
+              crearEl('td', {}, [
+                m.au ? crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => editarRolAuth(m.au) }, ['✏ Rol']) : null,
+                m.local ? crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => modalUsuario(m.local) }, ['Editar']) : null,
+              ]),
+            ]);
+          })),
+        ])]),
       ]));
     } catch {}
   } else if (configTab === 'empresa') {
@@ -1437,14 +1821,29 @@ function modalCliente(cl) {
   ], renderConfiguracion);
 }
 
+function editarRolAuth(au) {
+  abrirModal('Rol de ' + au.email, ['Guardar'], async (action, data) => {
+    await adminUpdateUser(au.id, { ...(au.raw_user_meta_data || {}), rol: data.rol });
+    mostrarMensaje('Rol actualizado. El usuario debe volver a iniciar sesión.', 'success');
+    renderConfiguracion();
+  }, [
+    { label: 'Email', type: 'static', value: au.email },
+    { label: 'Rol', name: 'rol', type: 'select', value: au.raw_user_meta_data?.rol || 'Producción', options: ['Administrador','Producción','Almacén','Ventas','Gerencia'] },
+  ], renderConfiguracion);
+}
+
 function modalUsuario(u) {
   abrirModal('Usuario', [u ? 'Guardar' : 'Crear'], async (action, data) => {
-    if (u) return api('/configuracion/usuarios/' + u.id, { method: 'PUT', body: data });
-    return api('/configuracion/usuarios', { method: 'POST', body: data });
+    if (u) {
+      await api('/configuracion/usuarios/' + u.id, { method: 'PUT', body: data });
+    } else {
+      await adminCreateUser(data.usuario, data.password, { rol: data.rol });
+      await api('/configuracion/usuarios', { method: 'POST', body: { usuario: data.usuario, password: data.password, rol: data.rol } });
+    }
   }, [
-    { label: 'Usuario', type: 'text', value: u?.usuario || '', required: true },
-    { label: 'Contraseña', type: 'password', value: '', required: !u },
-    { label: 'Rol', type: 'select', value: u?.rol || 'Producción', options: ['Administrador','Producción','Almacén','Ventas','Gerencia'] },
+    { label: 'Email', name: 'usuario', type: 'text', value: u?.usuario || '', required: true },
+    { label: 'Contraseña', name: 'password', type: 'password', value: '', required: !u },
+    { label: 'Rol', name: 'rol', type: 'select', value: u?.rol || 'Producción', options: ['Administrador','Producción','Almacén','Ventas','Gerencia'] },
   ], renderConfiguracion);
 }
 
