@@ -5,10 +5,22 @@
 
 -- 0. MIGRACIONES PARA TABLAS EXISTENTES
 -- ============================================================
+ALTER TABLE galpones ADD COLUMN IF NOT EXISTS alimento_sacos numeric(10,2) DEFAULT 0;
+ALTER TABLE galpones ADD COLUMN IF NOT EXISTS consumo_diario numeric(10,2) DEFAULT 0;
+ALTER TABLE galpones ADD COLUMN IF NOT EXISTS fecha_ingreso date;
+ALTER TABLE galpones ADD COLUMN IF NOT EXISTS produccion_promedio numeric(10,2) DEFAULT 0;
 ALTER TABLE produccion_molino ADD COLUMN IF NOT EXISTS galpon_id bigint REFERENCES galpones(id);
 ALTER TABLE produccion_molino ADD COLUMN IF NOT EXISTS detalle text;
+ALTER TABLE produccion_molino ADD COLUMN IF NOT EXISTS kg_producidos numeric(10,2) DEFAULT 0;
 ALTER TABLE ventas ADD COLUMN IF NOT EXISTS precio_primera numeric(10,2) DEFAULT 0;
 ALTER TABLE ventas ADD COLUMN IF NOT EXISTS precio_segunda numeric(10,2) DEFAULT 0;
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS total_jabas numeric(10,2) DEFAULT 0;
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_nombre text;
+ALTER TABLE insumos ADD COLUMN IF NOT EXISTS cantidad_kg numeric(10,2) DEFAULT 0;
+ALTER TABLE insumos ADD COLUMN IF NOT EXISTS stock_minimo_kg numeric(10,2) DEFAULT 0;
+ALTER TABLE insumos ADD COLUMN IF NOT EXISTS etiqueta text DEFAULT 'Kg';
+ALTER TABLE insumos ADD COLUMN IF NOT EXISTS ultima_compra date;
+ALTER TABLE insumos ADD COLUMN IF NOT EXISTS ultima_salida date;
 
 -- 1. TABLAS BASE
 -- ============================================================
