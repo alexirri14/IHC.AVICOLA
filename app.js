@@ -95,7 +95,7 @@ class SupabaseClient {
           if (refreshed) {
             options.headers.Authorization = `Bearer ${authToken}`;
             const retryResponse = await fetch(fullUrl, options);
-            if (retryResponse.ok) return await retryResponse.json();
+            if (retryResponse.ok) return await this.responseJson(retryResponse);
           }
           mostrarMensaje('Sesión expirada. Por favor, inicie sesión nuevamente.', 'error');
           cerrarSesion();
@@ -104,7 +104,7 @@ class SupabaseClient {
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
       }
-      return await response.json();
+      return await this.responseJson(response);
     } catch (error) {
       if (error.message !== 'Sesión expirada') {
         mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
@@ -112,6 +112,8 @@ class SupabaseClient {
       throw error;
     }
   }
+
+  async responseJson(res) { try { return await res.json(); } catch { return null; } }
 
   async select(table, columns = '*', filters = {}, options = {}) {
     const params = { ...options, select: columns };
@@ -143,7 +145,7 @@ class SupabaseClient {
           if (refreshed) {
             options.headers.Authorization = `Bearer ${authToken}`;
             const retryResponse = await fetch(url, options);
-            if (retryResponse.ok) return await retryResponse.json();
+            if (retryResponse.ok) return await this.responseJson(retryResponse);
           }
           mostrarMensaje('Sesión expirada. Por favor, inicie sesión nuevamente.', 'error');
           cerrarSesion();
@@ -152,7 +154,7 @@ class SupabaseClient {
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
       }
-      return await response.json();
+      return await this.responseJson(response);
     } catch (error) {
       if (error.message !== 'Sesión expirada') {
         mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
@@ -180,7 +182,7 @@ class SupabaseClient {
           if (refreshed) {
             options.headers.Authorization = `Bearer ${authToken}`;
             const retryResponse = await fetch(url, options);
-            if (retryResponse.ok) return await retryResponse.json();
+            if (retryResponse.ok) return await this.responseJson(retryResponse);
           }
           mostrarMensaje('Sesión expirada. Por favor, inicie sesión nuevamente.', 'error');
           cerrarSesion();
@@ -189,7 +191,7 @@ class SupabaseClient {
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
       }
-      return await response.json();
+      return await this.responseJson(response);
     } catch (error) {
       if (error.message !== 'Sesión expirada') {
         mostrarMensaje(`Error de base de datos: ${error.message}`, 'error');
@@ -506,7 +508,7 @@ async function api(path, options = {}) {
     }
 
     if (method === 'PUT') {
-      const m=cleanPath.match(/^\/(.+)\/(\d+)$/);
+      const m=cleanPath.match(/^\/(.+)\/([^/]+)$/);
       if(m){
         const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios', 'configuracion/parametros':'parametros', 'formulas':'formulas', 'clientes':'clientes' };
         const table = pathToTable[m[1]];
