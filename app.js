@@ -488,10 +488,10 @@ async function api(path, options = {}) {
         const pesoJaba = parseFloat((params.find(p=>p.clave==='peso_jaba_kg')||{}).valor)||18;
         const pp=parseFloat(body.precio_primera)||0;
         const ps=parseFloat(body.precio_segunda)||0;
-        const grupos=[['primera',pp],['pardo','jumbo','sucio','quinados',ps]];
+        const grupos=[{cats:['primera'],precio:pp},{cats:['pardo','jumbo','sucio','quinados'],precio:ps}];
         let tj=0,ti=0;
-        grupos.forEach(([t1,t2,t3,t4,t5,precio])=>{
-          [t1,t2,t3,t4,t5].filter(Boolean).forEach(k=>{
+        grupos.forEach(({cats,precio})=>{
+          cats.forEach(k=>{
             const jab=parseFloat(body[k])||0;
             tj+=jab;
             ti+=jab*pesoJaba*precio;
@@ -564,14 +564,15 @@ function aplicarSesion() {
     $('roleBadge').textContent = sesion.rol;
     const items = qsa('.nav-item[data-section]');
     if (sesion.rol === 'Producción') {
-      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','galpones','molino'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
+      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','galpones','molino','produccion'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
       $('subInventario').querySelectorAll('.nav-item').forEach(i => i.style.display = 'none');
     } else if (sesion.rol === 'Almacén') {
       items.forEach(i => { const s = i.dataset.section; if (!['dashboard','inventario','compras','almacen-huevos','almacen-insumos'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
     } else if (sesion.rol === 'Ventas') {
-      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','ventas'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
+      items.forEach(i => { const s = i.dataset.section; if (!['dashboard','ventas','clientes'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
     } else if (sesion.rol === 'Gerencia') {
       items.forEach(i => { const s = i.dataset.section; if (!['dashboard','reportes'].includes(s) && !i.closest('.nav-sub')) i.style.display = 'none'; });
+      $('subInventario').querySelectorAll('.nav-item').forEach(i => i.style.display = 'none');
     }
     navegar('dashboard');
   } else {
@@ -995,7 +996,7 @@ function renderMolinoInsumos(insumos) {
     const row = crearEl('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' } }, [
       crearEl('select', { id: 'molinoIns_' + idx, style: { flex: 1 } }, [
         crearEl('option', { value: '' }, ['Seleccione insumo...']),
-        ...insumos.map(i => crearEl('option', { value: i.id, label: i.nombre, selected: i.insumo_id === i.id }, [i.nombre])),
+        ...insumos.map(i => crearEl('option', { value: i.id, label: i.nombre, selected: item.insumo_id === i.id }, [i.nombre])),
       ]),
       crearEl('input', { id: 'molinoInsCant_' + idx, type: 'number', value: item.cantidad || '0', min: '0', step: '0.01', style: { width: '100px' }, placeholder: 'Cant. (kg)' }),
       crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px', padding: '4px 8px' }, onClick: () => { molinoInsumos.splice(idx, 1); renderMolinoInsumos(insumos); } }, ['✕']),
@@ -1533,10 +1534,10 @@ let ventaPesoJaba = 18;
 function calcVenta() {
   const pp = parseFloat($('precioPrimera')?.value) || 0;
   const ps = parseFloat($('precioSegunda')?.value) || 0;
-  const grupos = [['primera',pp],['pardo','jumbo','sucio','quinados',ps]];
+  const grupos = [{cats:['primera'],precio:pp},{cats:['pardo','jumbo','sucio','quinados'],precio:ps}];
   let totalJabas = 0, totalImporte = 0;
-  grupos.forEach(([t1,t2,t3,t4,t5,precio]) => {
-    [t1,t2,t3,t4,t5].filter(Boolean).forEach(k => {
+  grupos.forEach(({cats,precio}) => {
+    cats.forEach(k => {
       const jab = parseFloat($('venta_'+k)?.value) || 0;
       totalJabas += jab;
       const kg = jab * ventaPesoJaba;
@@ -1560,9 +1561,9 @@ async function registrarVenta() {
   const ps = parseFloat($('precioSegunda')?.value) || 0;
   const body = { fecha, cliente_id, cliente_nombre: $('ventaCliente')?.selectedOptions[0]?.text || '', precio_primera: pp, precio_segunda: ps };
   let totalJabas = 0, totalImporte = 0;
-  const grupos = [['primera',pp],['pardo','jumbo','sucio','quinados',ps]];
-  grupos.forEach(([t1,t2,t3,t4,t5,precio]) => {
-    [t1,t2,t3,t4,t5].filter(Boolean).forEach(k => {
+  const grupos = [{cats:['primera'],precio:pp},{cats:['pardo','jumbo','sucio','quinados'],precio:ps}];
+  grupos.forEach(({cats,precio}) => {
+    cats.forEach(k => {
       const jab = parseFloat($('venta_'+k)?.value) || 0;
       body[k] = jab;
       totalJabas += jab;

@@ -240,6 +240,14 @@ END $$;
 
 -- 2. VISTAS PARA REPORTES
 -- ============================================================
+DROP VIEW IF EXISTS vista_stock_alimento CASCADE;
+DROP VIEW IF EXISTS vista_dashboard CASCADE;
+DROP VIEW IF EXISTS vista_produccion_semanal CASCADE;
+DROP VIEW IF EXISTS vista_ventas_mensual CASCADE;
+DROP VIEW IF EXISTS vista_consumo_alimento CASCADE;
+DROP VIEW IF EXISTS vista_produccion_galpon CASCADE;
+DROP VIEW IF EXISTS vista_produccion_molino_formula CASCADE;
+DROP VIEW IF EXISTS vista_ingreso_insumos CASCADE;
 
 -- Vista: Stock de alimento por galpón
 CREATE OR REPLACE VIEW vista_stock_alimento AS
@@ -422,7 +430,8 @@ INSERT INTO empresa (nombre, ruc, direccion, telefono) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO parametros (clave, valor, descripcion) VALUES
-  ('peso_jaba_kg', '18', 'Peso promedio por jaba en kilogramos')
+  ('peso_jaba_kg', '18', 'Peso promedio por jaba de primera en kilogramos'),
+  ('peso_jaba_kg_segunda', '18', 'Peso promedio por jaba de segunda en kilogramos')
 ON CONFLICT (clave) DO NOTHING;
 
 INSERT INTO alertas (tipo, icono, mensaje) VALUES
