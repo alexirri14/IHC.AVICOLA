@@ -328,6 +328,11 @@ ORDER BY ii.fecha DESC;
 
 -- 3. RPC (STORED PROCEDURES)
 -- ============================================================
+DROP FUNCTION IF EXISTS sumar_stock(text, numeric) CASCADE;
+DROP FUNCTION IF EXISTS restar_stock(text, numeric) CASCADE;
+DROP FUNCTION IF EXISTS sumar_insumo(bigint, numeric, date) CASCADE;
+DROP FUNCTION IF EXISTS distribuir_alimento(numeric) CASCADE;
+DROP FUNCTION IF EXISTS registrar_consumo(date, bigint, numeric) CASCADE;
 
 -- Sumar al stock de huevos
 CREATE OR REPLACE FUNCTION sumar_stock(p_clase text, p_cantidad numeric)
