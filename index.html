@@ -93,21 +93,20 @@
     setTimeout(() => {
       const loadingScreen = document.querySelector('.app-loading');
       const appContainer = document.getElementById('app-container');
-      
-      // Simular verificación de autenticación con Supabase
+      if (!loadingScreen) return;
+
       const savedToken = localStorage.getItem('supabase.auth.token');
       
       if (savedToken) {
         try {
           const session = JSON.parse(savedToken);
           if (session && session.access_token) {
-            // Si hay una sesión válida, intentar cargar el contenido principal
             setTimeout(() => {
+              if (!loadingScreen) return;
               loadingScreen.style.opacity = '0';
               setTimeout(() => {
                 loadingScreen.style.display = 'none';
                 appContainer.classList.remove('hidden');
-                // Intentar aplicar sesión
                 if (typeof aplicarSesion === 'function') {
                   aplicarSesion();
                 }
@@ -120,8 +119,8 @@
         }
       }
       
-      // Si no hay sesión válida, continuar con el flujo de inicio de sesión normal
       setTimeout(() => {
+        if (!loadingScreen) return;
         loadingScreen.style.opacity = '0';
         setTimeout(() => {
           loadingScreen.style.display = 'none';
