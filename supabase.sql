@@ -250,7 +250,7 @@ DROP VIEW IF EXISTS vista_produccion_molino_formula CASCADE;
 DROP VIEW IF EXISTS vista_ingreso_insumos CASCADE;
 
 -- Vista: Stock de alimento por galpón
-CREATE OR REPLACE VIEW vista_stock_alimento AS
+CREATE OR REPLACE VIEW vista_stock_alimento WITH (security_invoker = true) AS
 SELECT 
   g.id,
   g.nombre,
@@ -264,7 +264,7 @@ FROM galpones g
 WHERE g.estado = 'Activo';
 
 -- Vista: Dashboard resumen
-CREATE OR REPLACE VIEW vista_dashboard AS
+CREATE OR REPLACE VIEW vista_dashboard WITH (security_invoker = true) AS
 SELECT
   COALESCE((SELECT SUM(gallinas) FROM galpones), 0) AS gallinas_vivas,
   COALESCE((SELECT SUM(primera + segunda) FROM produccion WHERE fecha = CURRENT_DATE), 0) AS produccion_hoy,
@@ -274,7 +274,7 @@ SELECT
   COALESCE((SELECT SUM(muertas) FROM produccion WHERE fecha = CURRENT_DATE), 0) AS mortalidad_hoy;
 
 -- Vista: Producción semanal
-CREATE OR REPLACE VIEW vista_produccion_semanal AS
+CREATE OR REPLACE VIEW vista_produccion_semanal WITH (security_invoker = true) AS
 SELECT fecha, SUM(primera + segunda) AS jabas
 FROM produccion
 WHERE fecha >= CURRENT_DATE - INTERVAL '7 days'
@@ -282,7 +282,7 @@ GROUP BY fecha
 ORDER BY fecha;
 
 -- Vista: Ventas mensuales
-CREATE OR REPLACE VIEW vista_ventas_mensual AS
+CREATE OR REPLACE VIEW vista_ventas_mensual WITH (security_invoker = true) AS
 SELECT fecha, SUM(total_jabas) AS jabas
 FROM ventas
 WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
@@ -290,7 +290,7 @@ GROUP BY fecha
 ORDER BY fecha;
 
 -- Vista: Consumo de alimento
-CREATE OR REPLACE VIEW vista_consumo_alimento AS
+CREATE OR REPLACE VIEW vista_consumo_alimento WITH (security_invoker = true) AS
 SELECT fecha, SUM(kg_producidos) AS kg
 FROM produccion_molino
 WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
@@ -298,20 +298,20 @@ GROUP BY fecha
 ORDER BY fecha;
 
 -- Vista: Producción con nombre de galpón
-CREATE OR REPLACE VIEW vista_produccion_galpon AS
+CREATE OR REPLACE VIEW vista_produccion_galpon WITH (security_invoker = true) AS
 SELECT p.*, g.nombre AS galpon_nombre
 FROM produccion p
 LEFT JOIN galpones g ON g.id = p.galpon_id;
 
 -- Vista: Producción molino con nombre de fórmula y galpón
-CREATE OR REPLACE VIEW vista_produccion_molino_formula AS
+CREATE OR REPLACE VIEW vista_produccion_molino_formula WITH (security_invoker = true) AS
 SELECT pm.*, f.nombre AS formula_nombre, g.nombre AS galpon_nombre
 FROM produccion_molino pm
 LEFT JOIN formulas f ON f.id = pm.formula_id
 LEFT JOIN galpones g ON g.id = pm.galpon_id;
 
 -- Vista: Ingreso de insumos con sus detalles
-CREATE OR REPLACE VIEW vista_ingreso_insumos AS
+CREATE OR REPLACE VIEW vista_ingreso_insumos WITH (security_invoker = true) AS
 SELECT ii.*, COALESCE(d.items, '[]'::json) AS items
 FROM ingreso_insumos ii
 LEFT JOIN LATERAL (
@@ -336,7 +336,7 @@ DROP FUNCTION IF EXISTS registrar_consumo(date, bigint, numeric) CASCADE;
 
 -- Sumar al stock de huevos
 CREATE OR REPLACE FUNCTION sumar_stock(p_clase text, p_cantidad numeric)
-RETURNS void LANGUAGE plpgsql AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
   IF p_cantidad > 0 THEN
     INSERT INTO stock_huevos (clase, cantidad) VALUES (p_clase, p_cantidad)
@@ -346,7 +346,7 @@ END $$;
 
 -- Restar del stock de huevos
 CREATE OR REPLACE FUNCTION restar_stock(p_clase text, p_cantidad numeric)
-RETURNS void LANGUAGE plpgsql AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
   IF p_cantidad > 0 THEN
     UPDATE stock_huevos SET cantidad = GREATEST(0, cantidad - p_cantidad) WHERE clase = p_clase;
@@ -355,14 +355,14 @@ END $$;
 
 -- Sumar cantidad a un insumo
 CREATE OR REPLACE FUNCTION sumar_insumo(p_id bigint, p_cantidad numeric, p_fecha date)
-RETURNS void LANGUAGE plpgsql AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
   UPDATE insumos SET cantidad_kg = cantidad_kg + p_cantidad, ultima_compra = p_fecha WHERE id = p_id;
 END $$;
 
 -- Distribuir alimento producido a los galpones activos
 CREATE OR REPLACE FUNCTION distribuir_alimento(p_sacos numeric)
-RETURNS void LANGUAGE plpgsql AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE
   total_activos integer;
   por_galpon numeric;
