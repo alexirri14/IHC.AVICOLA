@@ -1126,7 +1126,7 @@ async function renderProduccion() {
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Gallinas Muertas']), crearEl('input', { id: 'prodMuertas', type: 'number', value: '0', min: '0' })]),
       ]),
       crearEl('div', { style: { marginTop: '12px' } }, [
-        crearEl('button', { className: 'btn btn-green', onClick: registrarProduccion }, ['🥚 Registrar']),
+        crearEl('button', { id: 'btnRegistrarProd', className: 'btn btn-green', onClick: registrarProduccion }, ['🥚 Registrar']),
       ]),
     ]));
 
@@ -1151,18 +1151,20 @@ async function renderProduccion() {
 }
 
 async function registrarProduccion() {
+  const btn = $('btnRegistrarProd'); if (btn) btn.disabled = true;
   const fecha = $('prodFecha')?.value || hoy();
   const galpon_id = parseInt($('prodGalpon')?.value);
   const primera = parseFloat($('prodPrimera')?.value) || 0;
   const segunda = parseFloat($('prodSegunda')?.value) || 0;
   const muertas = parseInt($('prodMuertas')?.value) || 0;
-  if (!galpon_id) return mostrarMensaje('Seleccione un galpón', 'warning');
-  if (primera <= 0 && segunda <= 0) return mostrarMensaje('Ingrese al menos 1 jaba', 'warning');
+  if (!galpon_id) { if (btn) btn.disabled = false; return mostrarMensaje('Seleccione un galpón', 'warning'); }
+  if (primera <= 0 && segunda <= 0) { if (btn) btn.disabled = false; return mostrarMensaje('Ingrese al menos 1 jaba', 'warning'); }
   try {
     await api('/produccion', { method: 'POST', body: { fecha, galpon_id, primera, segunda, muertas } });
     mostrarMensaje('Producción registrada', 'success');
     renderProduccion();
   } catch (e) { mostrarMensaje('Error al registrar: ' + (e.message || ''), 'error'); }
+  finally { if (btn) btn.disabled = false; }
 }
 
 // --- ALMACEN HUEVOS ---
@@ -1234,7 +1236,7 @@ async function renderAlmacenHuevos() {
         crearEl('div', { className: 'form-group' }, [crearEl('label', {}, ['Quinados']), crearEl('input', { id: 'clasifQuinados', type: 'number', value: '0', min: '0', step: '0.5' })]),
       ]),
       crearEl('div', { style: { marginTop: '12px' } }, [
-        crearEl('button', { className: 'btn btn-primary', onClick: clasificarSegunda }, ['Clasificar']),
+        crearEl('button', { id: 'btnClasificar', className: 'btn btn-primary', onClick: clasificarSegunda }, ['Clasificar']),
       ]),
     ]);
     if (stockSegunda > 0) c.appendChild(clasifCard);
@@ -1260,6 +1262,7 @@ async function renderAlmacenHuevos() {
 }
 
 async function clasificarSegunda() {
+  const btn = $('btnClasificar'); if (btn) btn.disabled = true;
   const fecha = $('clasifFecha')?.value || hoy();
   const pardo = parseFloat($('clasifPardo')?.value) || 0;
   const jumbo = parseFloat($('clasifJumbo')?.value) || 0;
@@ -1267,14 +1270,15 @@ async function clasificarSegunda() {
   const limpieza = parseFloat($('clasifLimpieza')?.value) || 0;
   const quinados = parseFloat($('clasifQuinados')?.value) || 0;
   const total = pardo + jumbo + sucio + limpieza + quinados;
-  if (total <= 0) return mostrarMensaje('Ingrese al menos 1 jaba clasificada', 'warning');
+  if (total <= 0) { if (btn) btn.disabled = false; return mostrarMensaje('Ingrese al menos 1 jaba clasificada', 'warning'); }
   const stockSegunda = parseFloat($('clasifStockSegunda')?.getAttribute('data-stock') || 0);
-  if (total > stockSegunda) return mostrarMensaje(`Solo hay ${num(stockSegunda)} jabas de Segunda disponibles`, 'warning');
+  if (total > stockSegunda) { if (btn) btn.disabled = false; return mostrarMensaje(`Solo hay ${num(stockSegunda)} jabas de Segunda disponibles`, 'warning'); }
   try {
     await api('/almacen/clasificar', { method: 'PUT', body: { fecha, pardo, jumbo, sucio, limpieza, quinados } });
     mostrarMensaje('Clasificación guardada', 'success');
     renderAlmacenHuevos();
   } catch {}
+  finally { if (btn) btn.disabled = false; }
 }
 
 // --- ALMACEN INSUMOS ---
@@ -1337,7 +1341,7 @@ async function renderCompras() {
       crearEl('div', { id: 'ingresoItemsContainer', style: { marginBottom: '8px' } }),
       crearEl('button', { className: 'btn btn-outline btn-sm', onClick: agregarItemIngreso }, ['+ Agregar Insumo']),
       crearEl('div', { style: { marginTop: '12px' } }, [
-        crearEl('button', { className: 'btn btn-green', onClick: registrarIngreso }, ['📦 Registrar Ingreso']),
+        crearEl('button', { id: 'btnRegistrarIngreso', className: 'btn btn-green', onClick: registrarIngreso }, ['📦 Registrar Ingreso']),
       ]),
     ]);
     c.appendChild(formCard);
@@ -1396,10 +1400,11 @@ function agregarItemIngreso() {
 }
 
 async function registrarIngreso() {
+  const btn = $('btnRegistrarIngreso'); if (btn) btn.disabled = true;
   const fecha = $('ingresoFecha')?.value || hoy();
   const proveedor = $('ingresoProveedor')?.value?.trim();
   const detalle = $('ingresoDetalle')?.value?.trim();
-  if (!proveedor) return mostrarMensaje('Ingrese el nombre del proveedor', 'warning');
+  if (!proveedor) { if (btn) btn.disabled = false; return mostrarMensaje('Ingrese el nombre del proveedor', 'warning'); }
   const items = [];
   ingresoItems.forEach((_, idx) => {
     const sel = $('ingresoInsumo_' + idx);
@@ -1408,12 +1413,13 @@ async function registrarIngreso() {
       items.push({ insumo_id: parseInt(sel.value), insumo_nombre: sel.options[sel.selectedIndex].text, cantidad: cant });
     }
   });
-  if (!items.length) return mostrarMensaje('Agregue al menos un insumo con cantidad', 'warning');
+  if (!items.length) { if (btn) btn.disabled = false; return mostrarMensaje('Agregue al menos un insumo con cantidad', 'warning'); }
   try {
     await api('/ingresos', { method: 'POST', body: { fecha, proveedor_nombre: proveedor, detalle, items } });
     mostrarMensaje('Ingreso registrado', 'success');
     renderCompras();
   } catch {}
+  finally { if (btn) btn.disabled = false; }
 }
 
 function verDetalleIngreso(ing) {
