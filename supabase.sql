@@ -399,6 +399,31 @@ BEGIN
   END IF;
 END $$;
 
+-- 4. TRIGGERS
+-- ============================================================
+-- Auto revertir stock y gallinas al eliminar una producción (desde app o Supabase)
+CREATE OR REPLACE FUNCTION undo_produccion_delete()
+RETURNS trigger SECURITY DEFINER SET search_path = 'public' AS $$
+BEGIN
+  IF OLD.muertas > 0 THEN
+    UPDATE galpones SET gallinas = gallinas + OLD.muertas WHERE id = OLD.galpon_id;
+  END IF;
+  IF OLD.primera > 0 THEN
+    UPDATE stock_huevos SET cantidad = GREATEST(0, cantidad - OLD.primera) WHERE clase = 'Primera';
+  END IF;
+  IF OLD.segunda > 0 THEN
+    UPDATE stock_huevos SET cantidad = GREATEST(0, cantidad - OLD.segunda) WHERE clase = 'Segunda';
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_undo_produccion_delete ON produccion;
+CREATE TRIGGER trg_undo_produccion_delete
+AFTER DELETE ON produccion
+FOR EACH ROW
+EXECUTE FUNCTION undo_produccion_delete();
+
 -- 5. RLS (ROW LEVEL SECURITY)
 -- ============================================================
 ALTER TABLE galpones ENABLE ROW LEVEL SECURITY;

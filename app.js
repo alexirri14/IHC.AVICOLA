@@ -226,7 +226,7 @@ function crearEl(tag, props = {}, hijos = []) {
     else if (k === 'innerHTML') el.innerHTML = v;
     else el.setAttribute(k, v);
   });
-  hijos.forEach(h => { if (h != null) el.appendChild(typeof h === 'string' ? document.createTextNode(h) : h); });
+  hijos.forEach(h => { if (h != null) el.appendChild(typeof h === 'string' || typeof h === 'number' ? document.createTextNode(String(h)) : h); });
   return el;
 }
 function vaciar(el) { while (el.firstChild) el.removeChild(el.firstChild); }
@@ -1099,12 +1099,12 @@ async function eliminarVenta(v) {
 }
 
 async function eliminarProduccion(p) {
-  if (!confirm('¿Eliminar esta producción?')) return;
+  if (!confirm('¿Eliminar producción del ' + formatearFecha(p.fecha) + ' en ' + (p.galpon_nombre || 'Galpón #' + p.galpon_id) + '?')) return;
   try {
     await api('/produccion/' + p.id, { method: 'DELETE' });
-    mostrarMensaje('Producción eliminada', 'success');
-    renderReporteData();
-  } catch {}
+    mostrarMensaje('Producción eliminada — stock y gallinas restaurados', 'success');
+    renderProduccion();
+  } catch (e) { mostrarMensaje('Error al eliminar: ' + (e.message || ''), 'error'); }
 }
 
 // --- PRODUCCIÓN ---
@@ -1135,14 +1135,15 @@ async function renderProduccion() {
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Producción'])]),
       crearEl('div', { className: 'table-wrap' }, [
         crearEl('table', {}, [
-          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Muertas'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Muertas','Acción'].map(h => crearEl('th', {}, [h])))]),
           crearEl('tbody', {}, prod.length ? prod.slice(0,50).map(p => crearEl('tr', {}, [
             crearEl('td', {}, [formatearFecha(p.fecha)]),
             crearEl('td', {}, [p.galpon_nombre || `Galpón #${p.galpon_id}`]),
             crearEl('td', {}, [num(p.primera)]),
             crearEl('td', {}, [num(p.segunda)]),
             crearEl('td', {}, [p.muertas || 0]),
-          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: '#999' } }, ['Sin registros'])])]),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: e => { e.stopPropagation(); eliminarProduccion(p); } }, ['🗑'])]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '6', style: { textAlign: 'center', color: '#999' } }, ['Sin registros'])])]),
         ]),
       ]),
     ]));
@@ -1161,7 +1162,7 @@ async function registrarProduccion() {
     await api('/produccion', { method: 'POST', body: { fecha, galpon_id, primera, segunda, muertas } });
     mostrarMensaje('Producción registrada', 'success');
     renderProduccion();
-  } catch {}
+  } catch (e) { mostrarMensaje('Error al registrar: ' + (e.message || ''), 'error'); }
 }
 
 // --- ALMACEN HUEVOS ---
