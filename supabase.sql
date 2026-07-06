@@ -223,6 +223,19 @@ CREATE TABLE IF NOT EXISTS consumo_alimento (
   UNIQUE (fecha, galpon_id)
 );
 
+-- Clean up duplicates and add UNIQUE constraints (prevents ON CONFLICT issues)
+DELETE FROM produccion WHERE id NOT IN (SELECT MIN(id) FROM produccion GROUP BY fecha, galpon_id);
+ALTER TABLE produccion DROP CONSTRAINT IF EXISTS produccion_fecha_galpon_id_key;
+ALTER TABLE produccion ADD CONSTRAINT produccion_fecha_galpon_id_key UNIQUE (fecha, galpon_id);
+
+DELETE FROM galpones WHERE id NOT IN (SELECT MIN(id) FROM galpones GROUP BY nombre);
+ALTER TABLE galpones DROP CONSTRAINT IF EXISTS galpones_nombre_key;
+ALTER TABLE galpones ADD CONSTRAINT galpones_nombre_key UNIQUE (nombre);
+
+DELETE FROM alertas WHERE id NOT IN (SELECT MIN(id) FROM alertas GROUP BY mensaje);
+ALTER TABLE alertas DROP CONSTRAINT IF EXISTS alertas_mensaje_key;
+ALTER TABLE alertas ADD CONSTRAINT alertas_mensaje_key UNIQUE (mensaje);
+
 -- RPC: Registrar consumo diario y descontar del stock del galpón
 CREATE OR REPLACE FUNCTION registrar_consumo(p_fecha date, p_galpon_id bigint, p_sacos numeric)
 RETURNS void LANGUAGE plpgsql AS $$

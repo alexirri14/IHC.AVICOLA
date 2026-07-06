@@ -453,6 +453,18 @@ async function api(path, options = {}) {
       if (pts[cleanPath]) return await c.insert(pts[cleanPath], body);
 
       if (cleanPath === '/produccion') {
+        const existing = await c.select('produccion','*',{'fecha':'eq.'+body.fecha,'galpon_id':'eq.'+body.galpon_id});
+        if (existing.length > 0) {
+          const old = existing[0];
+          const df = (body.primera||0) - (old.primera||0);
+          const ds = (body.segunda||0) - (old.segunda||0);
+          const dm = (body.muertas||0) - (old.muertas||0);
+          const r = await c.update('produccion',{primera:body.primera||0,segunda:body.segunda||0,muertas:body.muertas||0},{'id':'eq.'+old.id});
+          if (dm !== 0) { const g = await c.select('galpones','*',{'id':'eq.'+body.galpon_id}); if(g[0]) await c.update('galpones',{gallinas:Math.max(0,(g[0].gallinas||0)-dm)},{'id':'eq.'+body.galpon_id}); }
+          if (df > 0) await c.rpc('sumar_stock',{p_clase:'Primera',p_cantidad:df}); else if (df < 0) await c.rpc('restar_stock',{p_clase:'Primera',p_cantidad:Math.abs(df)});
+          if (ds > 0) await c.rpc('sumar_stock',{p_clase:'Segunda',p_cantidad:ds}); else if (ds < 0) await c.rpc('restar_stock',{p_clase:'Segunda',p_cantidad:Math.abs(ds)});
+          return r;
+        }
         const r=await c.insert('produccion',{fecha:body.fecha,galpon_id:body.galpon_id,primera:body.primera||0,segunda:body.segunda||0,muertas:body.muertas||0});
         if(body.muertas){ const g=await c.select('galpones','*',{'id':'eq.'+body.galpon_id}); if(g[0]) await c.update('galpones',{gallinas:Math.max(0,(g[0].gallinas||0)-body.muertas)},{'id':'eq.'+body.galpon_id}); }
         if(body.primera>0) await c.rpc('sumar_stock',{p_clase:'Primera',p_cantidad:body.primera});
@@ -1126,7 +1138,7 @@ async function renderProduccion() {
           crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Muertas'].map(h => crearEl('th', {}, [h])))]),
           crearEl('tbody', {}, prod.length ? prod.slice(0,50).map(p => crearEl('tr', {}, [
             crearEl('td', {}, [formatearFecha(p.fecha)]),
-            crearEl('td', {}, [p.galpon_id ? `Galpón #${p.galpon_id}` : '-']),
+            crearEl('td', {}, [p.galpon_nombre || `Galpón #${p.galpon_id}`]),
             crearEl('td', {}, [num(p.primera)]),
             crearEl('td', {}, [num(p.segunda)]),
             crearEl('td', {}, [p.muertas || 0]),
