@@ -1146,7 +1146,7 @@ async function renderProduccion() {
         ]),
       ]),
     ]));
-  } catch { c.innerHTML = '<div class="card">Error al cargar producción</div>'; }
+  } catch (e) { c.innerHTML = '<div class="card">Error al cargar producción: ' + (e.message || 'desconocido') + '</div>'; console.error(e); }
 }
 
 async function registrarProduccion() {

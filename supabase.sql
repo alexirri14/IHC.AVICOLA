@@ -224,11 +224,23 @@ CREATE TABLE IF NOT EXISTS consumo_alimento (
 );
 
 -- Clean up duplicates and add UNIQUE constraints (prevents ON CONFLICT issues)
+-- First deduplicate produccion (keep one record per fecha+galpon)
 DELETE FROM produccion WHERE id NOT IN (SELECT MIN(id) FROM produccion GROUP BY fecha, galpon_id);
+
+-- Reassign production records from duplicate galpones to the kept one (handles FK)
+UPDATE produccion p
+SET galpon_id = (SELECT MIN(g2.id) FROM galpones g2 WHERE g2.nombre = g.nombre)
+FROM galpones g
+WHERE p.galpon_id = g.id
+  AND g.id NOT IN (SELECT MIN(g2.id) FROM galpones g2 WHERE g2.nombre = g.nombre);
+
+-- Now safe to delete duplicate galpones
+DELETE FROM galpones WHERE id NOT IN (SELECT MIN(id) FROM galpones GROUP BY nombre);
+
+-- Add UNIQUE constraints
 ALTER TABLE produccion DROP CONSTRAINT IF EXISTS produccion_fecha_galpon_id_key;
 ALTER TABLE produccion ADD CONSTRAINT produccion_fecha_galpon_id_key UNIQUE (fecha, galpon_id);
 
-DELETE FROM galpones WHERE id NOT IN (SELECT MIN(id) FROM galpones GROUP BY nombre);
 ALTER TABLE galpones DROP CONSTRAINT IF EXISTS galpones_nombre_key;
 ALTER TABLE galpones ADD CONSTRAINT galpones_nombre_key UNIQUE (nombre);
 
