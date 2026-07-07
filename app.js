@@ -661,11 +661,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  document.querySelectorAll('.nav-sub .nav-item').forEach(el => {
-    el.addEventListener('click', () => {
-      if (el.dataset.section) navegar(el.dataset.section);
-    });
-  });
 });
 
 // --- DASHBOARD ---
