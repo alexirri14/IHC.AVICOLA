@@ -6,6 +6,9 @@
   "scripts": {
     "deploy": "echo \"Desplegar en Vercel: vercel --prod\""
   },
+  "dependencies": {
+    "@vercel/speed-insights": "^2.0.0"
+  },
   "author": "IHC A VICOLA",
   "license": "MIT"
 }
