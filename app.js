@@ -394,9 +394,8 @@ async function doLogin() {
   const u = $('loginEmail')?.value?.trim();
   const p = $('loginPass')?.value?.trim();
   if (!u || !p) return mostrarMensaje('Ingrese correo electrónico y contraseña', 'warning');
-  try {
-    await iniciarSesion(u, p);
-  } catch { }
+  const result = await iniciarSesion(u, p);
+  if (!result.success) mostrarMensaje(result.error || 'Error de conexión con Supabase. Si usas Brave, desactivá el Shield para este sitio.', 'error');
 }
 
 function filtroFecha(desde, hasta) {
