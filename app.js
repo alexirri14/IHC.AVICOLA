@@ -234,6 +234,7 @@ function vaciar(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 function num(v, d = 2) { const n = parseFloat(v) || 0; return isNaN(n) ? '0.00' : n.toFixed(d); }
 
 function hoy() { return new Date().toISOString().split('T')[0]; }
+const PAGE_LIMIT = 200;
 
 function formatearFecha(f) {
   if (!f) return '-';
@@ -413,21 +414,22 @@ async function api(path, options = {}) {
 
   try {
     if (method === 'GET') {
-      const tabs = { '/galpones':['galpones','id.asc'],'/formulas':['formulas','id.asc'],'/produccion':['vista_produccion_galpon','fecha.desc'],'/insumos':['insumos','nombre.asc'],'/proveedores':['proveedores','nombre.asc'],'/clientes':['clientes','nombre.asc'],'/ventas':['ventas','fecha.desc'] };
-      if (tabs[cleanPath]) { const [t,o]=tabs[cleanPath]; return await c.select(t, '*', {}, { order: o }); }
+      const tabs = { '/galpones':['galpones','id.asc'],'/formulas':['formulas','id.asc'],'/produccion':['vista_produccion_galpon','fecha.desc',PAGE_LIMIT],'/insumos':['insumos','nombre.asc'],'/proveedores':['proveedores','nombre.asc'],'/clientes':['clientes','nombre.asc'],'/ventas':['ventas','fecha.desc',PAGE_LIMIT] };
+      if (tabs[cleanPath]) { const [t,o,lim]=tabs[cleanPath]; return await c.select(t, '*', {}, { order: o, ...(lim ? {limit: lim} : {}) }); }
       const m = cleanPath.match(/^\/(\w+)\/(\d+)$/);
       if (m) { const r = await c.select(m[1], '*', { 'id': 'eq.'+m[2] }); return r[0] || null; }
 
       if (cleanPath === '/alertas') return await c.select('alertas', '*', { activo: 'eq.true' });
-      if (cleanPath === '/consumo') return await c.select('consumo_alimento', '*', {}, { order: 'fecha.desc' });
-      if (cleanPath === '/molino') return await c.select('vista_produccion_molino_formula', '*', {}, { order: 'fecha.desc' });
+      if (cleanPath === '/consumo') return await c.select('consumo_alimento', '*', {}, { order: 'fecha.desc', limit: PAGE_LIMIT });
+      if (cleanPath === '/molino') return await c.select('vista_produccion_molino_formula', '*', {}, { order: 'fecha.desc', limit: PAGE_LIMIT });
       if (cleanPath === '/molino/stock-alimento') return await c.select('vista_stock_alimento');
       if (cleanPath === '/almacen/huevos') { const s=await c.select('stock_huevos'); const o={}; s.forEach(x=>o[x.clase]=x.cantidad); return {stock:o}; }
-      if (cleanPath === '/almacen/movimientos') return await c.select('almacen_movimientos', '*', {}, { order: 'fecha.desc' });
+      if (cleanPath === '/almacen/movimientos') return await c.select('almacen_movimientos', '*', {}, { order: 'fecha.desc', limit: PAGE_LIMIT });
       if (cleanPath === '/configuracion/usuarios') return await c.select('usuarios');
       if (cleanPath === '/configuracion/empresa') { const r = await c.select('empresa'); return r[0] || null; }
       if (cleanPath === '/configuracion/parametros') return await c.select('parametros');
       if (cleanPath === '/ingresos') return await c.select('vista_ingreso_insumos');
+      if (cleanPath === '/clasificacion/historial') return await c.select('clasificacion_huevos', '*', {}, { order: 'fecha.desc', limit: PAGE_LIMIT });
 
       if (cleanPath === '/reportes/dashboard') {
         const [d,ps,vm,ca]=await Promise.all([c.select('vista_dashboard'),c.select('vista_produccion_semanal'),c.select('vista_ventas_mensual'),c.select('vista_consumo_alimento')]);
@@ -439,17 +441,17 @@ async function api(path, options = {}) {
         const desde = urlParams.get('desde') || $('repDesde')?.value || diasAtras(30);
         const hasta = urlParams.get('hasta') || $('repHasta')?.value || hoy();
         const ff = filtroFecha(desde, hasta);
-        if (tab==='produccion') return await c.select('vista_produccion_galpon','*',ff,{order:'fecha.desc'});
-        if (tab==='ventas') return await c.select('ventas','*',ff,{order:'fecha.desc'});
+        if (tab==='produccion') return await c.select('vista_produccion_galpon','*',ff,{order:'fecha.desc',limit:PAGE_LIMIT});
+        if (tab==='ventas') return await c.select('ventas','*',ff,{order:'fecha.desc',limit:PAGE_LIMIT});
         if (tab==='inventario') { const [hue,i]=await Promise.all([c.select('stock_huevos'),c.select('insumos')]); return {huevos:hue.map(h=>({...h,stock:h.cantidad})),insumos:i}; }
-        if (tab==='molino') return await c.select('vista_produccion_molino_formula','*',ff,{order:'fecha.desc'});
-        if (tab==='galpones') { const g=await c.select('galpones'); return await Promise.all(g.map(async g=>{ const p=await c.select('vista_produccion_galpon','*',{galpon_id:'eq.'+g.id,...ff},{order:'fecha.desc'}); const mu=p.reduce((s,x)=>s+(x.muertas||0),0); return {...g,produccion:p,mortalidad:mu}; })); }
-        if (tab==='mortalidad') return await c.select('vista_produccion_galpon','*',{muertas:'gt.0',...ff},{order:'fecha.desc'});
+        if (tab==='molino') return await c.select('vista_produccion_molino_formula','*',ff,{order:'fecha.desc',limit:PAGE_LIMIT});
+        if (tab==='galpones') { const g=await c.select('galpones'); return await Promise.all(g.map(async g=>{ const p=await c.select('vista_produccion_galpon','*',{galpon_id:'eq.'+g.id,...ff},{order:'fecha.desc',limit:PAGE_LIMIT}); const mu=p.reduce((s,x)=>s+(x.muertas||0),0); return {...g,produccion:p,mortalidad:mu}; })); }
+        if (tab==='mortalidad') return await c.select('vista_produccion_galpon','*',{muertas:'gt.0',...ff},{order:'fecha.desc',limit:PAGE_LIMIT});
       }
     }
 
     if (method === 'POST') {
-      const pts = { '/galpones':'galpones','/configuracion/usuarios':'usuarios','/formulas':'formulas','/clientes':'clientes' };
+      const pts = { '/galpones':'galpones','/configuracion/usuarios':'usuarios','/formulas':'formulas','/clientes':'clientes','/configuracion/parametros':'parametros','/insumos':'insumos' };
       if (pts[cleanPath]) return await c.insert(pts[cleanPath], body);
 
       if (cleanPath === '/produccion') {
@@ -522,7 +524,7 @@ async function api(path, options = {}) {
     if (method === 'PUT') {
       const m=cleanPath.match(/^\/(.+)\/([^/]+)$/);
       if(m){
-        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios', 'configuracion/parametros':'parametros', 'formulas':'formulas', 'clientes':'clientes' };
+        const pathToTable = { 'galpones':'galpones', 'configuracion/usuarios':'usuarios', 'configuracion/parametros':'parametros', 'formulas':'formulas', 'clientes':'clientes', 'insumos':'insumos' };
         const table = pathToTable[m[1]];
         if(table) return await c.update(table, body, {'id':'eq.'+m[2]});
       }
@@ -532,10 +534,17 @@ async function api(path, options = {}) {
     }
 
     if (method === 'DELETE') {
-      const ds = cleanPath.match(/^\/(ventas|produccion|molino|ingresos)\/(\d+)$/);
+      const ds = cleanPath.match(/^\/(ventas|produccion|molino|ingresos|formulas|galpones|clientes|insumos)\/(\d+)$/);
       if (ds) {
-        const tableMap = { ventas:'ventas', produccion:'produccion', molino:'produccion_molino', ingresos:'ingreso_insumos' };
+        const tableMap = { ventas:'ventas', produccion:'produccion', molino:'produccion_molino', ingresos:'ingreso_insumos', formulas:'formulas', galpones:'galpones', clientes:'clientes', insumos:'insumos' };
         return await c.delete(tableMap[ds[1]], { 'id': 'eq.'+ds[2] });
+      }
+      const cnf = cleanPath.match(/^\/configuracion\/(parametros|usuarios)\/(\d+)$/);
+      if (cnf) {
+        return await c.delete(cnf[1], { 'id': 'eq.'+cnf[2] });
+      }
+      if (cleanPath === '/clasificacion/eliminar') {
+        return await c.delete('clasificacion_huevos', { 'id': 'eq.'+body.id });
       }
       throw new Error('Ruta no implementada: '+method+' '+cleanPath);
     }
@@ -778,7 +787,10 @@ async function renderGalpones() {
             crearEl('span', { style: { fontSize: '20px' } }, ['🐔']),
             crearEl('h4', { style: { fontSize: '15px', fontWeight: 600 } }, [g.nombre]),
           ]),
-          crearEl('span', { className: g.estado === 'Activo' ? 'chip chip-green' : 'chip chip-orange' }, [g.estado || 'Activo']),
+          crearEl('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [
+            crearEl('span', { className: g.estado === 'Activo' ? 'chip chip-green' : 'chip chip-orange' }, [g.estado || 'Activo']),
+            crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px', padding: '2px 6px' }, onClick: (e) => { e.stopPropagation(); eliminarGalpon(g); } }, ['🗑']),
+          ]),
         ]),
         crearEl('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px', color: 'var(--text2)' } }, [
           crearEl('div', {}, [`🟉 ${(g.gallinas || 0).toLocaleString()} gallinas`]),
@@ -886,6 +898,15 @@ async function modalGalponDetalle(g) {
     if (action === 'Editar') { modalGalpon(data); return Promise.resolve(); }
     return Promise.resolve();
   }, fields, null, '480px');
+}
+
+async function eliminarGalpon(g) {
+  if (!confirm('¿Eliminar el galpón "' + g.nombre + '" y todos sus registros asociados?')) return;
+  try {
+    await api('/galpones/' + g.id, { method: 'DELETE' });
+    mostrarMensaje('Galpón eliminado', 'success');
+    renderGalpones();
+  } catch (e) { mostrarMensaje('Error: No se puede eliminar el galpón porque tiene registros asociados', 'error'); }
 }
 
 // --- MOLINO ---
@@ -1066,10 +1087,19 @@ async function verDetalleMolino(p) {
 }
 
 async function eliminarProduccionMolino(p) {
-  if (!confirm('¿Eliminar esta producción de alimento?')) return;
+  if (!confirm('¿Eliminar esta producción de alimento? Se revertirá la distribución.')) return;
   try {
+    const c = getSupabaseAuth();
+    const sacos = (p.tandas || 0) * 30;
+    const activos = await c.select('galpones', '*', { estado: 'eq.Activo' });
+    if (activos.length > 0) {
+      const porGalpon = sacos / activos.length;
+      for (const g of activos) {
+        await c.update('galpones', { alimento_sacos: Math.max(0, (g.alimento_sacos || 0) - porGalpon) }, { 'id': 'eq.'+g.id });
+      }
+    }
     await api('/molino/' + p.id, { method: 'DELETE' });
-    mostrarMensaje('Producción eliminada', 'success');
+    mostrarMensaje('Producción eliminada y distribución revertida', 'success');
     renderMolino();
   } catch {}
 }
@@ -1090,10 +1120,15 @@ function verDetalleVenta(v) {
 }
 
 async function eliminarVenta(v) {
-  if (!confirm('¿Eliminar esta venta?')) return;
+  if (!confirm('¿Eliminar esta venta? Se restaurará el stock de huevos.')) return;
   try {
+    const c = getSupabaseAuth();
+    for (const k of ['primera','pardo','jumbo','sucio','quinados']) {
+      const cant = parseFloat(v[k]) || 0;
+      if (cant > 0) await c.rpc('sumar_stock', { p_clase: k.charAt(0).toUpperCase() + k.slice(1), p_cantidad: cant });
+    }
     await api('/ventas/' + v.id, { method: 'DELETE' });
-    mostrarMensaje('Venta eliminada', 'success');
+    mostrarMensaje('Venta eliminada y stock restaurado', 'success');
     renderReporteData();
   } catch {}
 }
@@ -1133,6 +1168,9 @@ async function renderProduccion() {
     // Historial
     c.appendChild(crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Producción'])]),
+      crearEl('div', { style: { padding: '8px 16px' } }, [
+        crearEl('input', { type: 'text', placeholder: '🔍 Buscar por galpón o fecha...', style: { width: '100%', padding: '6px 10px', fontSize: '13px' }, onInput: (e) => { const q = e.target.value.toLowerCase(); const rows = (e.target.closest('.card').querySelector('tbody') || {}).querySelectorAll?.('tr'); if (rows) rows.forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'); } }),
+      ]),
       crearEl('div', { className: 'table-wrap' }, [
         crearEl('table', {}, [
           crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Muertas','Acción'].map(h => crearEl('th', {}, [h])))]),
@@ -1241,6 +1279,23 @@ async function renderAlmacenHuevos() {
     ]);
     if (stockSegunda > 0) c.appendChild(clasifCard);
 
+    // Historial de clasificaciones
+    const clasifHist = await api('/clasificacion/historial');
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Clasificaciones'])]),
+      crearEl('div', { className: 'table-wrap' }, [
+        crearEl('table', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Clase','Jabas','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, clasifHist.length ? clasifHist.map(cl => crearEl('tr', {}, [
+            crearEl('td', {}, [formatearFecha(cl.fecha)]),
+            crearEl('td', {}, [cl.clase]),
+            crearEl('td', {}, [num(cl.cantidad)]),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: () => eliminarClasificacion(cl) }, ['🗑'])]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '4', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+        ]),
+      ]),
+    ]));
+
     // Movimientos recientes
     const movs = await api('/almacen/movimientos');
     c.appendChild(crearEl('div', { className: 'card' }, [
@@ -1281,19 +1336,40 @@ async function clasificarSegunda() {
   finally { if (btn) btn.disabled = false; }
 }
 
+async function eliminarClasificacion(cl) {
+  if (!confirm('¿Eliminar clasificación de ' + cl.cantidad + ' jabas como "' + cl.clase + '" del ' + formatearFecha(cl.fecha) + '?')) return;
+  try {
+    const c = getSupabaseAuth();
+    const destino = cl.clase === 'limpieza' ? 'Primera' : cl.clase.charAt(0).toUpperCase() + cl.clase.slice(1);
+    await c.rpc('restar_stock', { p_clase: destino, p_cantidad: cl.cantidad });
+    await c.rpc('sumar_stock', { p_clase: 'Segunda', p_cantidad: cl.cantidad });
+    await api('/clasificacion/eliminar', { method: 'DELETE', body: { id: cl.id } });
+    mostrarMensaje('Clasificación eliminada y stock restaurado', 'success');
+    renderAlmacenHuevos();
+  } catch {}
+}
+
 // --- ALMACEN INSUMOS ---
 async function renderAlmacenInsumos() {
   const c = $('content'); vaciar(c); c.innerHTML = '<div class="card">Cargando...</div>';
   try {
     const insumos = await api('/insumos');
     vaciar(c);
-    c.appendChild(crearEl('div', { className: 'card-header' }, [
-      crearEl('h3', {}, ['Inventario de Insumos']),
+    c.appendChild(crearEl('div', { className: 'card' }, [
+      crearEl('div', { className: 'card-header' }, [
+        crearEl('h3', {}, ['Inventario de Insumos']),
+        crearEl('div', { className: 'actions' }, [
+          crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => modalInsumo(null) }, ['+ Nuevo']),
+        ]),
+      ]),
+      crearEl('div', { style: { padding: '0 16px 8px' } }, [
+        crearEl('input', { type: 'text', placeholder: '🔍 Buscar insumo...', style: { width: '100%', padding: '6px 10px', fontSize: '13px' }, onInput: (e) => { const q = e.target.value.toLowerCase(); const rows = (e.target.closest('.card').querySelector('tbody') || {}).querySelectorAll?.('tr'); if (rows) rows.forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'); } }),
+      ]),
     ]));
     const maxRef = Math.max(...insumos.map(i => i.cantidad_kg || 0), 1);
     c.appendChild(crearEl('div', { className: 'table-wrap' }, [
       crearEl('table', {}, [
-        crearEl('thead', {}, [crearEl('tr', {}, ['Producto','Stock','Unidad','Stock Mínimo','Barra','Última Compra','Última Salida'].map(h => crearEl('th', {}, [h])))]),
+        crearEl('thead', {}, [crearEl('tr', {}, ['Producto','Stock','Unidad','Stock Mínimo','Barra','Última Compra','Última Salida','Acción'].map(h => crearEl('th', {}, [h])))]),
         crearEl('tbody', {}, insumos.map(i => {
           const pct = Math.min(((i.cantidad_kg || 0) / maxRef) * 100, 100);
           const critico = (i.cantidad_kg || 0) < (i.stock_minimo_kg || 0);
@@ -1309,11 +1385,36 @@ async function renderAlmacenInsumos() {
             ]),
             crearEl('td', {}, [formatearFecha(i.ultima_compra)]),
             crearEl('td', {}, [formatearFecha(i.ultima_salida)]),
+            crearEl('td', {}, [
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => modalInsumo(i) }, ['✏']),
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => eliminarInsumo(i) }, ['🗑']),
+            ]),
           ]);
         })),
       ]),
     ]));
   } catch { c.innerHTML = '<div class="card">Error al cargar insumos</div>'; }
+}
+
+function modalInsumo(i) {
+  abrirModal('Insumo', [i ? 'Guardar' : 'Crear'], async (action, data) => {
+    if (i) return api('/insumos/' + i.id, { method: 'PUT', body: data });
+    return api('/insumos', { method: 'POST', body: data });
+  }, [
+    { label: 'Nombre', name: 'nombre', type: 'text', value: i?.nombre || '', required: true },
+    { label: 'Stock (kg)', name: 'cantidad_kg', type: 'number', value: i?.cantidad_kg || 0, step: '0.01' },
+    { label: 'Stock Mínimo (kg)', name: 'stock_minimo_kg', type: 'number', value: i?.stock_minimo_kg || 0, step: '0.01' },
+    { label: 'Unidad', name: 'etiqueta', type: 'text', value: i?.etiqueta || 'Kg' },
+  ], renderAlmacenInsumos);
+}
+
+async function eliminarInsumo(i) {
+  if (!confirm('¿Eliminar el insumo "' + i.nombre + '"?')) return;
+  try {
+    await api('/insumos/' + i.id, { method: 'DELETE' });
+    mostrarMensaje('Insumo eliminado', 'success');
+    renderAlmacenInsumos();
+  } catch {}
 }
 
 // --- INGRESO DE INSUMOS ---
@@ -1352,6 +1453,9 @@ async function renderCompras() {
     // Historial
     c.appendChild(crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Ingresos de Insumos'])]),
+      crearEl('div', { style: { padding: '8px 16px' } }, [
+        crearEl('input', { type: 'text', placeholder: '🔍 Buscar por proveedor, detalle o fecha...', style: { width: '100%', padding: '6px 10px', fontSize: '13px' }, onInput: (e) => { const q = e.target.value.toLowerCase(); const rows = (e.target.closest('.card').querySelector('tbody') || {}).querySelectorAll?.('tr'); if (rows) rows.forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'); } }),
+      ]),
       crearEl('div', { className: 'table-wrap' }, [
         crearEl('table', {}, [
           crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Proveedor','Detalle','Insumos','Acción'].map(h => crearEl('th', {}, [h])))]),
@@ -1439,10 +1543,18 @@ function verDetalleIngreso(ing) {
 }
 
 async function eliminarIngreso(ing) {
-  if (!confirm('¿Eliminar este ingreso de insumos?')) return;
+  if (!confirm('¿Eliminar este ingreso de insumos? Se restaurará el stock.')) return;
   try {
+    const c = getSupabaseAuth();
+    const items = typeof ing.items === 'string' ? JSON.parse(ing.items) : (ing.items || []);
+    for (const item of items) {
+      const ins = await c.select('insumos', '*', { 'id': 'eq.'+item.insumo_id });
+      if (ins[0]) {
+        await c.update('insumos', { cantidad_kg: Math.max(0, (ins[0].cantidad_kg || 0) - item.cantidad) }, { 'id': 'eq.'+item.insumo_id });
+      }
+    }
     await api('/ingresos/' + ing.id, { method: 'DELETE' });
-    mostrarMensaje('Ingreso eliminado', 'success');
+    mostrarMensaje('Ingreso eliminado y stock restaurado', 'success');
     renderCompras();
   } catch {}
 }
@@ -1523,16 +1635,20 @@ async function renderVentas() {
     // Historial
     c.appendChild(crearEl('div', { className: 'card' }, [
       crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Historial de Ventas'])]),
+      crearEl('div', { style: { padding: '8px 16px' } }, [
+        crearEl('input', { type: 'text', placeholder: '🔍 Buscar por cliente o fecha...', style: { width: '100%', padding: '6px 10px', fontSize: '13px' }, onInput: (e) => { const q = e.target.value.toLowerCase(); const rows = (e.target.closest('.card').querySelector('tbody') || {}).querySelectorAll?.('tr'); if (rows) rows.forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'); } }),
+      ]),
       crearEl('div', { className: 'table-wrap' }, [
         crearEl('table', {}, [
-          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Cliente','Jabas','Peso (kg)','Total'].map(h => crearEl('th', {}, [h])))]),
-          crearEl('tbody', {}, ventas.length ? ventas.map(v => crearEl('tr', {}, [
+          crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Cliente','Jabas','Peso (kg)','Total','Acción'].map(h => crearEl('th', {}, [h])))]),
+          crearEl('tbody', {}, ventas.length ? ventas.map(v => crearEl('tr', { style: { cursor: 'pointer' }, onClick: () => verDetalleVenta(v) }, [
             crearEl('td', {}, [formatearFecha(v.fecha)]),
             crearEl('td', {}, [v.cliente_nombre || '-']),
             crearEl('td', {}, [num(v.total_jabas)]),
             crearEl('td', {}, [num(v.peso)]),
             crearEl('td', {}, ['S/ ' + num(v.total)]),
-          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '5', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
+            crearEl('td', {}, [crearEl('button', { className: 'btn btn-sm btn-outline', style: { fontSize: '11px' }, onClick: (e) => { e.stopPropagation(); eliminarVenta(v); } }, ['🗑'])]),
+          ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '6', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin registros'])])]),
         ]),
       ]),
     ]));
@@ -1630,6 +1746,7 @@ async function renderReporteData() {
     vaciar(div);
 
     if (reportesTab === 'produccion') {
+      div.appendChild(crearEl('input', { type: 'text', placeholder: '🔍 Buscar...', style: { width: '100%', padding: '6px 10px', fontSize: '13px', marginBottom: '8px' }, onInput: (e) => { const q = e.target.value.toLowerCase(); const rows = (e.target.parentElement.querySelector('tbody') || {}).querySelectorAll?.('tr'); if (rows) rows.forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'); } }));
       div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
         crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Galpón','Primera','Segunda','Total','Muertas','Acción'].map(h => crearEl('th', {}, [h])))]),
         crearEl('tbody', {}, data.length ? data.map(p => crearEl('tr', {}, [
@@ -1643,6 +1760,7 @@ async function renderReporteData() {
         ])) : [crearEl('tr', {}, [crearEl('td', { colspan: '7', style: { textAlign: 'center', color: 'var(--text2)' } }, ['Sin datos'])])]),
       ])]));
     } else if (reportesTab === 'ventas') {
+      div.appendChild(crearEl('input', { type: 'text', placeholder: '🔍 Buscar por cliente o fecha...', style: { width: '100%', padding: '6px 10px', fontSize: '13px', marginBottom: '8px' }, onInput: (e) => { const q = e.target.value.toLowerCase(); const rows = (e.target.parentElement.querySelector('tbody') || {}).querySelectorAll?.('tr'); if (rows) rows.forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'); } }));
       div.appendChild(crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
         crearEl('thead', {}, [crearEl('tr', {}, ['Fecha','Cliente','Jabas','Peso','Total','Acción'].map(h => crearEl('th', {}, [h])))]),
         crearEl('tbody', {}, data.length ? data.map(v => crearEl('tr', { style: { cursor: 'pointer' }, onClick: () => verDetalleVenta(v) }, [
@@ -1731,7 +1849,8 @@ async function renderConfiguracion() {
               crearEl('td', { style: { fontSize: '11px', color: 'var(--text3)' } }, [m.authId ? m.authId.slice(0,8)+'...' : '-']),
               crearEl('td', {}, [
                 m.au ? crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => editarRolAuth(m.au) }, ['✏ Rol']) : null,
-                m.local ? crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => modalUsuario(m.local) }, ['Editar']) : null,
+                m.local ? crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => modalUsuario(m.local) }, ['Editar']) : null,
+                crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => eliminarUsuario(m) }, ['🗑']),
               ]),
             ]);
           })),
@@ -1756,14 +1875,17 @@ async function renderConfiguracion() {
     try {
       const params = await api('/configuracion/parametros');
       c.appendChild(crearEl('div', { className: 'card' }, [
-        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Parámetros del Sistema'])]),
+        crearEl('div', { className: 'card-header' }, [crearEl('h3', {}, ['Parámetros del Sistema']), crearEl('div', { className: 'actions' }, [crearEl('button', { className: 'btn btn-primary btn-sm', onClick: () => nuevoParametro() }, ['+ Nuevo'])])]),
         crearEl('div', { className: 'table-wrap' }, [crearEl('table', {}, [
           crearEl('thead', {}, [crearEl('tr', {}, ['Clave','Valor','Descripción','Acción'].map(h => crearEl('th', {}, [h])))]),
           crearEl('tbody', {}, params.map(p => crearEl('tr', {}, [
             crearEl('td', { style: { fontWeight: 500 } }, [p.clave]),
             crearEl('td', {}, [p.valor]),
             crearEl('td', { style: { color: 'var(--text2)', fontSize: '12px' } }, [p.descripcion||'']),
-            crearEl('td', {}, [crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => editarParametro(p) }, ['✏ Editar'])]),
+            crearEl('td', {}, [
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => editarParametro(p) }, ['✏ Editar']),
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => eliminarParametro(p) }, ['🗑']),
+            ]),
           ]))),
         ])]),
       ]));
@@ -1778,7 +1900,10 @@ async function renderConfiguracion() {
           crearEl('tbody', {}, formulas.map(f => crearEl('tr', {}, [
             crearEl('td', { style: { fontWeight: 500 } }, [f.nombre]),
             crearEl('td', {}, [f.descripcion||'-']),
-            crearEl('td', {}, [crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => modalFormula(f) }, ['✏ Editar'])]),
+            crearEl('td', {}, [
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => modalFormula(f) }, ['✏ Editar']),
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => eliminarFormula(f) }, ['🗑']),
+            ]),
           ]))),
         ])]),
       ]));
@@ -1792,7 +1917,10 @@ async function renderConfiguracion() {
           crearEl('thead', {}, [crearEl('tr', {}, ['Nombre','Acción'].map(h => crearEl('th', {}, [h])))]),
           crearEl('tbody', {}, clientes.map(cl => crearEl('tr', {}, [
             crearEl('td', { style: { fontWeight: 500 } }, [cl.nombre]),
-            crearEl('td', {}, [crearEl('button', { className: 'btn btn-outline btn-sm', onClick: () => modalCliente(cl) }, ['✏ Editar'])]),
+            crearEl('td', {}, [
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px', marginRight: '4px' }, onClick: () => modalCliente(cl) }, ['✏ Editar']),
+              crearEl('button', { className: 'btn btn-outline btn-sm', style: { fontSize: '11px' }, onClick: () => eliminarCliente(cl) }, ['🗑']),
+            ]),
           ]))),
         ])]),
       ]));
@@ -1824,6 +1952,27 @@ async function editarParametro(p) {
   ], renderConfiguracion);
 }
 
+function nuevoParametro() {
+  abrirModal('Nuevo Parámetro', ['Crear'], async (action, data) => {
+    if (!data.clave || !data.valor) { mostrarMensaje('Clave y Valor son obligatorios', 'warning'); return { success: false }; }
+    await api('/configuracion/parametros', { method: 'POST', body: data });
+    renderConfiguracion();
+  }, [
+    { label: 'Clave', name: 'clave', type: 'text', value: '', required: true },
+    { label: 'Valor', name: 'valor', type: 'text', value: '', required: true },
+    { label: 'Descripción', name: 'descripcion', type: 'text', value: '' },
+  ], renderConfiguracion);
+}
+
+async function eliminarParametro(p) {
+  if (!confirm('¿Eliminar el parámetro "' + p.clave + '"?')) return;
+  try {
+    await api('/configuracion/parametros/' + p.id, { method: 'DELETE' });
+    mostrarMensaje('Parámetro eliminado', 'success');
+    renderConfiguracion();
+  } catch {}
+}
+
 function modalFormula(f) {
   abrirModal('Fórmula', [f ? 'Guardar' : 'Crear'], async (action, data) => {
     if (f) return api('/formulas/' + f.id, { method: 'PUT', body: data });
@@ -1834,6 +1983,15 @@ function modalFormula(f) {
   ], renderConfiguracion);
 }
 
+async function eliminarFormula(f) {
+  if (!confirm('¿Eliminar la fórmula "' + f.nombre + '"?')) return;
+  try {
+    await api('/formulas/' + f.id, { method: 'DELETE' });
+    mostrarMensaje('Fórmula eliminada', 'success');
+    renderConfiguracion();
+  } catch {}
+}
+
 function modalCliente(cl) {
   abrirModal('Cliente', [cl ? 'Guardar' : 'Crear'], async (action, data) => {
     if (cl) return api('/clientes/' + cl.id, { method: 'PUT', body: data });
@@ -1841,6 +1999,15 @@ function modalCliente(cl) {
   }, [
     { label: 'Nombre', name: 'nombre', type: 'text', value: cl?.nombre || '', required: true },
   ], renderConfiguracion);
+}
+
+async function eliminarCliente(cl) {
+  if (!confirm('¿Eliminar el cliente "' + cl.nombre + '"?')) return;
+  try {
+    await api('/clientes/' + cl.id, { method: 'DELETE' });
+    mostrarMensaje('Cliente eliminado', 'success');
+    renderConfiguracion();
+  } catch {}
 }
 
 function editarRolAuth(au) {
@@ -1867,6 +2034,22 @@ function modalUsuario(u) {
     { label: 'Contraseña', name: 'password', type: 'password', value: '', required: !u },
     { label: 'Rol', name: 'rol', type: 'select', value: u?.rol || 'Producción', options: ['Administrador','Producción','Almacén','Ventas','Gerencia'] },
   ], renderConfiguracion);
+}
+
+async function eliminarUsuario(m) {
+  if (!confirm('¿Eliminar el usuario "' + m.email + '"?')) return;
+  try {
+    const c = getSupabaseAuth();
+    if (m.local?.id) await c.delete('usuarios', { 'id': 'eq.'+m.local.id });
+    if (m.authId) {
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${m.authId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'apikey': SUPABASE_SERVICE_KEY }
+      });
+    }
+    mostrarMensaje('Usuario eliminado', 'success');
+    renderConfiguracion();
+  } catch (e) { mostrarMensaje('Error al eliminar usuario: ' + (e.message || ''), 'error'); }
 }
 
 // --- MODAL UTILITY ---

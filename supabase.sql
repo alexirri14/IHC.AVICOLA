@@ -493,5 +493,18 @@ INSERT INTO alertas (tipo, icono, mensaje) VALUES
   ('info', 'ℹ️', 'Bienvenido al sistema ERP Avícola. Configure los datos iniciales en Configuración.')
 ON CONFLICT DO NOTHING;
 
+-- 6. ÍNDICES DE RENDIMIENTO
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_produccion_fecha ON produccion (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_produccion_galpon_fecha ON produccion (galpon_id, fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_consumo_alimento_fecha ON consumo_alimento (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_consumo_alimento_galpon_fecha ON consumo_alimento (galpon_id, fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_almacen_movimientos_fecha ON almacen_movimientos (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_clasificacion_huevos_fecha ON clasificacion_huevos (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_produccion_molino_fecha ON produccion_molino (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_ingreso_insumos_fecha ON ingreso_insumos (fecha DESC);
+
 -- Nota: Las vistas no necesitan RLS explícito porque leen de tablas que ya tienen RLS.
 -- Los usuarios autenticados pueden leer las vistas directamente.
